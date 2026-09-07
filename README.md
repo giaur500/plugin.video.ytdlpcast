@@ -88,9 +88,9 @@ that add-on's own settings.
 
 ## Limitations
 
-* **1080p ceiling.** YouTube's HLS manifest tops out at 1920x1080. Higher resolutions exist
-  only as separate video and audio DASH streams, which would require generating an MPD
-  manifest instead.
+* **Available formats come from yt-dlp, not from this add-on.** Which resolutions and codecs
+  a given video offers is decided by yt-dlp and by what YouTube publishes for it. This add-on
+  only passes the resulting manifest to InputStream Adaptive.
 * **VOD only in practice.** Live streams work, but seeking backwards is limited to whatever
   DVR window the broadcaster provides — a server-side limit, not one imposed here.
 * **JavaScript runtime.** yt-dlp warns that YouTube extraction without a JS runtime (deno,
