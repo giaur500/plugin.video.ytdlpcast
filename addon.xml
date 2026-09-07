@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="plugin.video.ytdlpcast"
+       name="yt-dlp cast player"
+       version="1.0.0"
+       provider-name="michal">
+
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.yt-dlp" version="2025.11.12-1"/>
+        <import addon="inputstream.adaptive" version="20.0.0"/>
+    </requires>
+
+    <extension point="xbmc.python.pluginsource" library="main.py">
+        <provides>video</provides>
+    </extension>
+
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en_GB">Play YouTube links resolved by yt-dlp through InputStream Adaptive</summary>
+        <description lang="en_GB">Resolves a YouTube video to its HLS master manifest with yt-dlp and hands that single URL to InputStream Adaptive, which gives seeking and bitrate switching without downloading the file. Meant to be selected as TubeCast's playback add-on, but works standalone via plugin://plugin.video.ytdlpcast/?video_id=ID</description>
+        <platform>all</platform>
+        <license>MIT</license>
+        <source>https://github.com/</source>
+        <assets/>
+    </extension>
+</addon>

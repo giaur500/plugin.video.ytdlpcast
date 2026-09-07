@@ -1,0 +1,43 @@
+# Kodi Media Center language file
+# Addon Name: yt-dlp cast player
+# Addon id: plugin.video.ytdlpcast
+msgid ""
+msgstr ""
+"Project-Id-Version: plugin.video.ytdlpcast\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: en_GB\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgctxt "#30010"
+msgid "No video id in the plugin URL"
+msgstr ""
+
+msgctxt "#30011"
+msgid "yt-dlp could not resolve this video"
+msgstr ""
+
+msgctxt "#30012"
+msgid "No playable stream found"
+msgstr ""
+
+msgctxt "#30100"
+msgid "Playback"
+msgstr ""
+
+msgctxt "#30101"
+msgid "Fall back to a progressive stream"
+msgstr ""
+
+msgctxt "#30102"
+msgid "If no HLS manifest is offered, play the best single file that carries both video and audio. Most YouTube videos no longer have one, so this rarely helps."
+msgstr ""
+
+msgctxt "#30103"
+msgid "Send the legacy manifest_type property"
+msgstr ""
+
+msgctxt "#30104"
+msgid "InputStream Adaptive 21 detects HLS from the mime type. Enable this only if playback fails with a manifest type error on an older build."
+msgstr ""
