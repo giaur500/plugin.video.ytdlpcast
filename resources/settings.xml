@@ -81,30 +81,10 @@
         </category>
         <category id="subtitles" label="30140">
             <group id="1" label="30140">
-                <setting id="subtitles_mode" type="integer" label="30141" help="30142">
-                    <level>1</level>
-                    <default>1</default>
-                    <constraints>
-                        <options>
-                            <option label="30143">0</option>
-                            <option label="30144">1</option>
-                            <option label="30145">2</option>
-                            <option label="30146">3</option>
-                        </options>
-                    </constraints>
-                    <control type="list" format="integer">
-                        <heading>30141</heading>
-                    </control>
-                </setting>
-                <setting id="subtitles_langs" type="string" label="30147" help="30148">
-                    <level>1</level>
-                    <default></default>
-                    <constraints>
-                        <allowempty>true</allowempty>
-                    </constraints>
-                    <control type="edit" format="string">
-                        <heading>30147</heading>
-                    </control>
+                <setting id="subtitles_enabled" type="boolean" label="30141" help="30142">
+                    <level>0</level>
+                    <default>true</default>
+                    <control type="toggle"/>
                 </setting>
             </group>
         </category>

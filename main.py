@@ -52,16 +52,6 @@ def as_seconds(value):
         return 0
 
 
-def subtitle_languages():
-    """Languages from the setting, or Kodi's own interface language."""
-    configured = ADDON.getSettingString("subtitles_langs")
-    languages = [code.strip().lower() for code in configured.split(",") if code.strip()]
-    if not languages:
-        language = xbmc.getLanguage(xbmc.ISO_639_1)
-        languages = [language] if language else []
-    return languages
-
-
 def server_base_url():
     return "http://127.0.0.1:{}".format(ADDON.getSettingInt("http_port"))
 
@@ -121,43 +111,34 @@ def safe_name(video_id):
 
 
 def download_subtitles(info, name):
-    """Save the selected subtitles as local files; return their paths.
+    """Save the uploader's subtitles as local files; return their paths.
 
     Kodi reads the language from the file name: CUtil::GetExternalStreamDetailsFromFilename
     strips the video's base name, splits the rest on " .-" and walks the tokens
-    backwards until one converts to an ISO code. Naming them
-    "<video id>.<lang>.srt" therefore labels them properly in the OSD, whether
-    or not the prefix matches the stream's own name.
-
-    Handing Kodi local files instead of the raw timedtext URLs also means a
-    track YouTube refuses is noticed here and logged, rather than silently
-    never appearing.
+    backwards until one converts to an ISO code, so "<video id>.<lang>.srt"
+    labels each track. Kodi then ranks these external tracks against its own
+    "Preferred subtitle language" setting and selects the best match itself.
     """
-    wanted = resolver.pick_subtitles(
-        info, subtitle_languages(), ADDON.getSettingInt("subtitles_mode"))
-    if not wanted:
+    if not ADDON.getSettingBool("subtitles_enabled"):
         return []
 
     out_dir = paths.manifest_directory()
-    paths_out = []
-    for language, url in wanted:
+    saved = []
+    for language, url in resolver.pick_subtitles(info):
         target = os.path.join(out_dir, "{}.{}.srt".format(name, language))
         try:
             data = resolver.fetch_subtitle(url)
-        except resolver.SubtitleUnavailable as refused:
-            # Typically a machine translation (tlang=), which YouTube throttles.
-            log("subtitles: {} refused by YouTube ({}), skipping".format(language, refused),
-                xbmc.LOGWARNING)
-            continue
         except Exception as error:  # noqa: BLE001 - one bad track must not stop playback
             log("subtitles: {} failed ({}: {}), skipping".format(
                 language, type(error).__name__, error), xbmc.LOGWARNING)
             continue
         with xbmcvfs.File(target, "w") as handle:
             handle.write(data)
-        paths_out.append(target)
-        log("subtitles: {} saved to {}".format(language, target))
-    return paths_out
+        saved.append(target)
+    if saved:
+        log("subtitles: {} track(s) ready: {}".format(
+            len(saved), ", ".join(os.path.basename(p) for p in saved)))
+    return saved
 
 
 def apply_manifest_filters(info, url, headers, video_id):

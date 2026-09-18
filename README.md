@@ -116,25 +116,21 @@ failed, nothing changed — the add-on hands over YouTube's original URL, exactl
 
 ### Subtitles
 
-* **Load subtitles** — *Off*, *Uploaded only* (default), *Uploaded, else automatic*,
-  *Uploaded and automatic*. Uploaded subtitles come from the video's author. Automatic ones
-  are YouTube's speech recognition, and in any language other than the original they are a
-  machine translation of that — hence the conservative default.
-* **Languages** — comma-separated codes such as `pl, en`; empty means Kodi's interface
-  language. Only these are loaded, never YouTube's full list of 150+ machine-translated
-  tracks.
+* **Download subtitles** — on by default. Downloads every subtitle track the video's **author
+  uploaded**, as `<video id>.<lang>.srt` files in Kodi's temp directory, handed to the player
+  with `setSubtitles()`.
 
-Subtitles are downloaded before playback into Kodi's temp directory as
-`<video id>.<lang>.srt` and handed to the player as local files. Kodi reads the language from
-that file name, so they appear in the OSD subtitle menu already labelled, selectable and
-switchable, without any folder browsing — `setSubtitles()` attaches them to the playing item
-rather than making Kodi search anywhere.
+Kodi reads the language from the file name and ranks these external tracks against its own
+**Settings → Player → Language → Preferred subtitle language**, so it selects the best match
+by itself — `VideoPlayer.cpp` scores "an external sub whose language matches the preferred
+subtitle's language" explicitly, and honours the `original` and `forced_only` modes too.
+Nothing is searched for on disk: the files are attached to the playing item.
 
-One limit is YouTube's, not ours: the original transcript downloads fine, but machine
-*translations* of it (the `tlang=` tracks) answer HTTP 429 for every request after the first,
-regardless of headers or backoff. Such a language is skipped with a warning in the log and the
-ones that worked are still offered — previously Kodi fetched those URLs itself and the
-subtitles simply never appeared, with nothing in the log.
+YouTube's automatic captions are deliberately not used. They are machine output, and the
+machine-*translated* ones cannot be fetched at all: that endpoint requires browser TLS
+impersonation (`curl_cffi`), answering HTTP 429 to everything else — yt-dlp itself included.
+There is no Kodi module providing it, and it ships as per-architecture binaries, so no add-on
+can. Author-uploaded tracks have no such limit: five languages download in half a second.
 
 ### Playback
 

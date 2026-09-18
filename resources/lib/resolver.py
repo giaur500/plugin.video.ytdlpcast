@@ -331,71 +331,50 @@ def filter_manifest(text, max_height=0, video_codec=VIDEO_AUTO,
 # Subtitles
 # ---------------------------------------------------------------------------
 
-SUBS_OFF, SUBS_UPLOADED, SUBS_UPLOADED_ELSE_AUTO, SUBS_BOTH = 0, 1, 2, 3
-
-# Kodi reads both, srt without any surprises.
+# Kodi reads both; srt without any surprises.
 _SUBTITLE_EXTENSIONS = ("srt", "vtt")
 
 
-def _best_track(table, language):
-    """URL of the preferred subtitle file for a language, or None.
-
-    yt-dlp keys tracks by codes such as 'pl', 'en-US' or 'en-orig'; an exact
-    match wins, then any regional or original-transcript variant of it.
-    """
-    candidates = [language] + sorted(key for key in table if key.startswith(language + "-"))
-    for key in candidates:
-        tracks = table.get(key) or ()
-        for extension in _SUBTITLE_EXTENSIONS:
-            for track in tracks:
-                if track.get("ext") == extension and track.get("url"):
-                    return track["url"]
-    return None
-
-
-class SubtitleUnavailable(Exception):
-    """YouTube refused this subtitle track; the others may still work."""
-
-
 def fetch_subtitle(url, headers=None, timeout=20):
-    """Bytes of one subtitle file.
-
-    YouTube rate-limits the timedtext endpoint hard: the original transcript
-    downloads fine, but machine-translated tracks (tlang=) answer 429 for every
-    request after the first, regardless of headers or backoff. Raising a
-    distinct error lets the caller drop that language and keep the rest.
-    """
+    """Bytes of one subtitle file."""
     request = urllib.request.Request(url, headers=dict(headers or {}))
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.read()
-    except urllib.error.HTTPError as error:
-        if error.code in (429, 403):
-            raise SubtitleUnavailable("HTTP {}".format(error.code)) from error
-        raise
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return response.read()
 
 
-def pick_subtitles(info, languages, mode):
-    """[(language, url)] according to the subtitles mode, never the whole table.
+def _primary_language(code):
+    """'de-DE' -> 'de', 'es-419' -> 'es'.
 
-    YouTube offers machine captions in well over a hundred languages; only the
-    ones asked for are considered.
+    Kodi resolves the language from the file name, and a plain ISO 639-1 code
+    converts reliably; a regional suffix would be the last token and might not.
     """
-    if mode == SUBS_OFF or not languages:
-        return []
-    uploaded = info.get("subtitles") or {}
-    automatic = info.get("automatic_captions") or {}
+    return code.split("-")[0].lower()
 
+
+def pick_subtitles(info):
+    """[(language, url)] for every subtitle the uploader provided.
+
+    Only info["subtitles"] is considered -- the author's own tracks. YouTube's
+    automatic_captions are machine output, and the translated ones among them
+    are unusable anyway: that endpoint demands browser TLS impersonation and
+    answers HTTP 429 to everything else, including yt-dlp itself.
+
+    One entry per language; a regional variant does not get a second slot.
+    """
+    uploaded = info.get("subtitles") or {}
     chosen = []
-    for language in languages:
-        manual = _best_track(uploaded, language)
-        auto = _best_track(automatic, language)
-        if manual:
-            chosen.append((language, manual))
-        if mode == SUBS_BOTH and auto:
-            chosen.append((language, auto))
-        elif mode == SUBS_UPLOADED_ELSE_AUTO and not manual and auto:
-            chosen.append((language, auto))
+    seen = set()
+    for code in sorted(uploaded):
+        language = _primary_language(code)
+        if language in seen:
+            continue
+        for extension in _SUBTITLE_EXTENSIONS:
+            track = next((t for t in uploaded[code]
+                          if t.get("ext") == extension and t.get("url")), None)
+            if track:
+                chosen.append((language, track["url"]))
+                seen.add(language)
+                break
     return chosen
 
 
