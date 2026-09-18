@@ -7,158 +7,153 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: en_GB\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: pl_pl\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
 msgctxt "#30011"
 msgid "yt-dlp could not resolve this video"
-msgstr ""
+msgstr "yt-dlp nie zdołał rozwiązać tego filmu"
 
 msgctxt "#30012"
 msgid "No playable stream found"
-msgstr ""
+msgstr "Nie znaleziono strumienia do odtworzenia"
 
 msgctxt "#30013"
 msgid "Open settings"
-msgstr ""
+msgstr "Otwórz ustawienia"
 
 msgctxt "#30100"
 msgid "Playback"
-msgstr ""
+msgstr "Odtwarzanie"
 
 msgctxt "#30101"
 msgid "Fall back to a progressive stream"
-msgstr ""
+msgstr "Awaryjnie użyj strumienia progresywnego"
 
 msgctxt "#30102"
 msgid "If no HLS manifest is offered, play the best single file that carries both video and audio. Most YouTube videos no longer have one, so this rarely helps."
-msgstr ""
+msgstr "Gdy film nie udostępnia manifestu HLS, odtwórz najlepszy pojedynczy plik zawierający obraz i dźwięk razem. Na YouTube pomaga rzadko, bo takie formaty w większości już nie istnieją; przydaje się na innych serwisach."
 
 msgctxt "#30103"
 msgid "Send the legacy manifest_type property"
-msgstr ""
+msgstr "Wysyłaj przestarzałą właściwość manifest_type"
 
 msgctxt "#30104"
 msgid "InputStream Adaptive 21 detects HLS from the mime type. Enable this only if playback fails with a manifest type error on an older build."
-msgstr ""
+msgstr "InputStream Adaptive 21 rozpoznaje HLS po typie MIME. Włącz tylko wtedy, gdy na starszej wersji odtwarzanie kończy się błędem typu manifestu."
 
 msgctxt "#30110"
 msgid "Picture & sound"
-msgstr ""
+msgstr "Obraz i dźwięk"
 
 msgctxt "#30111"
 msgid "Maximum resolution"
-msgstr ""
+msgstr "Maksymalna rozdzielczość"
 
 msgctxt "#30112"
 msgid "Variants above this height are removed from the manifest before InputStream Adaptive sees it. \"No limit\" leaves the choice to its adaptive logic."
-msgstr ""
+msgstr "Warianty powyżej tej wysokości są usuwane z manifestu, zanim zobaczy go InputStream Adaptive. „Bez ograniczeń” zostawia wybór jego logice adaptacyjnej."
 
 msgctxt "#30113"
 msgid "No limit"
-msgstr ""
+msgstr "Bez ograniczeń"
 
 msgctxt "#30114"
 msgid "2160p (4K)"
-msgstr ""
+msgstr "2160p (4K)"
 
 msgctxt "#30115"
 msgid "1440p"
-msgstr ""
+msgstr "1440p"
 
 msgctxt "#30116"
 msgid "1080p"
-msgstr ""
+msgstr "1080p"
 
 msgctxt "#30117"
 msgid "720p"
-msgstr ""
+msgstr "720p"
 
 msgctxt "#30118"
 msgid "480p"
-msgstr ""
+msgstr "480p"
 
 msgctxt "#30119"
 msgid "Video codec"
-msgstr ""
+msgstr "Kodek wideo"
 
 msgctxt "#30120"
 msgid "YouTube offers H.264 and VP9 up to 1080p and VP9 alone above it. \"H.264 only\" caps playback at 1080p; \"VP9 only\" needs hardware VP9 decoding. A choice that would leave nothing to play is ignored."
-msgstr ""
+msgstr "YouTube udostępnia H.264 i VP9 do 1080p, a powyżej wyłącznie VP9. „Tylko H.264” ogranicza więc odtwarzanie do 1080p, a „Tylko VP9” wymaga sprzętowego dekodowania VP9. Wybór, po którym nie zostałby żaden wariant, jest ignorowany."
 
 msgctxt "#30121"
 msgid "Auto"
-msgstr ""
+msgstr "Automatycznie"
 
 msgctxt "#30122"
 msgid "H.264 only"
-msgstr ""
+msgstr "Tylko H.264"
 
 msgctxt "#30123"
 msgid "VP9 only"
-msgstr ""
+msgstr "Tylko VP9"
 
 msgctxt "#30124"
 msgid "Audio track"
-msgstr ""
+msgstr "Ścieżka dźwiękowa"
 
 msgctxt "#30125"
 msgid "InputStream Adaptive on Kodi 21 starts YouTube's packed-ADTS audio silent until the first seek. \"fMP4 (fixed)\" replaces it with YouTube's DASH AAC track in fMP4, read by the same demuxer as the video, so sound plays from the first frame. \"As published\" keeps YouTube's own audio (silent-until-seek) for diagnosis."
-msgstr ""
+msgstr "InputStream Adaptive na Kodi 21 startuje bez dźwięku przy audio YouTube w formacie packed-ADTS — dźwięk pojawia się dopiero po pierwszym przewinięciu. „fMP4 (naprawione)” podmienia je na ścieżkę DASH AAC w kontenerze fMP4, czytaną tym samym demuxerem co obraz, więc dźwięk gra od pierwszej klatki. „Jak udostępnia YouTube” zostawia oryginalne audio do celów diagnostycznych."
 
 msgctxt "#30126"
 msgid "fMP4 (fixed)"
-msgstr ""
+msgstr "fMP4 (naprawione)"
 
 msgctxt "#30127"
 msgid "As published"
-msgstr ""
+msgstr "Jak udostępnia YouTube"
 
 msgctxt "#30140"
 msgid "Subtitles"
-msgstr ""
+msgstr "Napisy"
 
 msgctxt "#30141"
 msgid "Download subtitles"
-msgstr ""
+msgstr "Pobieraj napisy"
 
 msgctxt "#30142"
 msgid "Downloads every subtitle track the video's author uploaded, as files Kodi labels by language. Kodi then picks the one matching its own \"Preferred subtitle language\" setting. YouTube's automatic captions are not used: they are machine output, and the translated ones require browser TLS impersonation that no Kodi add-on can provide."
-msgstr ""
-
-
-
-
-
+msgstr "Pobiera wszystkie napisy wgrane przez autora filmu jako pliki, którym Kodi nadaje etykiety językowe. Kodi samo wybiera ścieżkę pasującą do swojego ustawienia „Preferowany język napisów”. Napisy automatyczne YouTube nie są używane: to wynik pracy maszyny, a ich tłumaczenia wymagają podszycia się pod przeglądarkę na poziomie TLS, czego żaden dodatek Kodi nie zapewni."
 
 msgctxt "#30150"
 msgid "Rewrite the manifest (enables the settings below)"
-msgstr ""
+msgstr "Przepisuj manifest (włącza ustawienia poniżej)"
 
 msgctxt "#30151"
 msgid "The settings below work by rewriting YouTube's HLS master playlist and serving the copy from 127.0.0.1 to InputStream Adaptive. Switch this off to hand over YouTube's manifest untouched, exactly as version 1.0 did — no rewriting, no local server."
-msgstr ""
+msgstr "Ustawienia poniżej działają przez przepisanie manifestu HLS YouTube i udostępnienie kopii z adresu 127.0.0.1 dla InputStream Adaptive. Wyłącz, aby przekazywać manifest YouTube nietknięty, dokładnie jak w wersji 1.0 — bez przepisywania i bez lokalnego serwera."
 
 msgctxt "#30152"
 msgid "Quality selection"
-msgstr ""
+msgstr "Wybór jakości"
 
 msgctxt "#30153"
 msgid "\"Adaptive\" keeps every allowed variant and lets InputStream Adaptive switch by measured bandwidth. \"Best available\" keeps only the tallest, highest-bitrate variant that passed the codec and resolution settings, so it plays at that quality from the first second — and buffers rather than adapts if the connection cannot carry it."
-msgstr ""
+msgstr "„Adaptacyjnie” zostawia wszystkie dozwolone warianty i pozwala InputStream Adaptive przełączać je według zmierzonej przepustowości. „Najlepsza dostępna” zostawia tylko wariant o najwyższej rozdzielczości i najwyższym bitrate spośród tych, które przeszły ustawienia kodeka i rozdzielczości — odtwarzanie startuje od razu w tej jakości, ale przy zbyt wolnym łączu będzie buforować zamiast się dostosować."
 
 msgctxt "#30154"
 msgid "Adaptive"
-msgstr ""
+msgstr "Adaptacyjnie"
 
 msgctxt "#30155"
 msgid "Best available"
-msgstr ""
+msgstr "Najlepsza dostępna"
 
 msgctxt "#30156"
 msgid "Local manifest server port"
-msgstr ""
+msgstr "Port lokalnego serwera manifestów"
 
 msgctxt "#30157"
 msgid "Rewritten manifests are served to InputStream Adaptive from 127.0.0.1 on this port. Change it only if another add-on already uses it (plugin.video.youtube uses 50152); the server restarts on its own."
-msgstr ""
+msgstr "Przepisane manifesty są udostępniane dla InputStream Adaptive z adresu 127.0.0.1 na tym porcie. Zmień tylko wtedy, gdy port zajmuje inny dodatek (plugin.video.youtube używa 50152); serwer przeładuje się sam."

@@ -106,6 +106,27 @@ def build_audio_playlist(info, out_dir, name):
     return audio_name, language
 
 
+def show_settings():
+    """Opened from the Kodi UI with nothing to play.
+
+    This add-on is a playback back end rather than a browsable source, so there
+    is no listing to show. Open the settings straight away and leave one entry
+    behind, so the folder is not empty and the settings stay a click away.
+
+    The directory is ended as succeeded on purpose: failing it makes Kodi log an
+    error, bounce back to the previous folder and let the caller raise an error
+    message -- exactly what a plain launch should not do.
+    """
+    ADDON.openSettings()
+    if HANDLE < 0:
+        return
+    item = xbmcgui.ListItem(label=ADDON.getLocalizedString(30013))
+    item.setArt({"icon": "DefaultAddonService.png"})
+    xbmcplugin.addDirectoryItem(
+        HANDLE, "plugin://{}/".format(ADDON_ID), item, isFolder=False)
+    xbmcplugin.endOfDirectory(HANDLE, succeeded=True, cacheToDisc=False)
+
+
 def safe_name(video_id):
     return re.sub(r"[^A-Za-z0-9_-]", "_", video_id or "video")
 
@@ -203,7 +224,7 @@ def main():
     video_id = params.get("video_id")
     url = params.get("url") or (resolver.watch_url(video_id) if video_id else None)
     if not url:
-        return fail(30010)
+        return show_settings()
 
     # TubeCast sends "seek"; Tubed calls the same thing "start_offset".
     seek = as_seconds(params.get("seek") or params.get("start_offset"))

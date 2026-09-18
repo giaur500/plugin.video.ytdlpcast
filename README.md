@@ -144,6 +144,15 @@ can. Author-uploaded tracks have no such limit: five languages download in half 
   directory; it restarts by itself when the port is changed. If the port cannot be bound, the
   service logs why and playback continues with manifests as published.
 
+## Launching it from the Kodi UI
+
+The add-on is a playback back end, not a browsable source, so opening it from Add-ons has
+nothing to list. Instead of failing, it opens its settings and leaves a single "Open settings"
+entry behind. The directory is ended as *succeeded* deliberately: failing it makes Kodi log an
+error, bounce back to the previous folder and let the caller raise an error dialog.
+
+Settings and messages are translated to Polish; English is the source language.
+
 ## Limitations
 
 * **Available formats come from yt-dlp, not from this add-on.** Which resolutions and codecs
