@@ -77,20 +77,74 @@ Parameters:
 
 ## Settings
 
+The add-on never asks yt-dlp to choose a format — InputStream Adaptive picks the variant. So
+the picture and sound settings work by **rewriting the HLS master manifest** before it is
+handed over. The rewritten copy is served to InputStream Adaptive from a tiny HTTP server on
+`127.0.0.1` that the add-on's background service runs for as long as Kodi does. A local file
+path is not an option: InputStream Adaptive does not accept one, Kodi falls back to its own
+demuxer, and that plays the first variant only, without audio groups or seeking (that was
+version 1.1.0's bug).
+
+Whenever the rewrite cannot be delivered — switched off, server not running, manifest fetch
+failed, nothing changed — the add-on hands over YouTube's original URL, exactly as 1.0 did.
+
+### Picture & sound
+
+* **Rewrite the manifest** — on by default; the master switch for everything below. Off means
+  YouTube's manifest untouched, no local server involved.
+* **Maximum resolution** — *No limit* (default), 2160p, 1440p, 1080p, 720p, 480p. Variants
+  above the limit are removed; within it InputStream Adaptive still adapts.
+* **Video codec** — *Auto* (default), *H.264 only*, *VP9 only*. YouTube offers both codecs up
+  to 1080p and VP9 alone above it, so *H.264 only* caps playback at 1080p, and *VP9 only* needs
+  hardware VP9 decoding. A choice that would leave nothing to play is ignored rather than
+  obeyed.
+* **Quality selection** — *Adaptive* (default) keeps every allowed variant and lets
+  InputStream Adaptive switch by measured bandwidth. *Best available* keeps only the tallest,
+  highest-bitrate variant that passed the codec and resolution settings, so playback starts
+  at that quality instead of ramping up from 240p — and buffers rather than adapts if the
+  connection cannot carry it. Together with the codec and resolution settings this reads as:
+  "these are the codecs my device decodes, these resolutions are allowed, now give me the
+  best of that".
+* **Audio track** — *fMP4 (fixed)* (default) or *As published*. InputStream Adaptive on
+  Kodi 21 starts YouTube's packed-ADTS HLS audio **silent until the first seek** — the audio
+  demuxer only gets its PTS offset on a segment change, so the first packets are never
+  selected until any seek triggers one. The fix replaces the audio with YouTube's DASH AAC
+  track (itag 140) rebuilt as an fMP4 byte-range playlist, which the same fragmented reader as
+  the video plays from the first frame. Confirmed working on CoreELEC Omega. *As published* keeps YouTube's own audio for
+  diagnosis. This also collapses the old duplicate-audio-group and dubbing issues: the fMP4
+  track is a single AAC-LC rendition, chosen in the video's original language.
+
+### Subtitles
+
+* **Load subtitles** — *Off*, *Uploaded only* (default), *Uploaded, else automatic*,
+  *Uploaded and automatic*. Uploaded subtitles come from the video's author. Automatic ones
+  are YouTube's speech recognition, and in any language other than the original they are a
+  machine translation of that — hence the conservative default.
+* **Languages** — comma-separated codes such as `pl, en`; empty means Kodi's interface
+  language. Only these are loaded, never YouTube's full list of 150+ machine-translated
+  tracks.
+
+### Playback
+
 * **Fall back to a progressive stream** — if no HLS manifest is offered, play the best single
   file carrying both video and audio. Rarely helps on YouTube, since such formats mostly no
   longer exist; useful for other sites.
 * **Send the legacy manifest_type property** — off by default. InputStream Adaptive 21
   detects HLS from the mime type. Enable only if an older build refuses the manifest.
-
-Picture quality is InputStream Adaptive's business, not this add-on's: cap the resolution in
-that add-on's own settings.
+* **Local manifest server port** — `50153` by default (`plugin.video.youtube` uses 50152).
+  The server listens on loopback only and serves nothing but `.m3u8` files from one
+  directory; it restarts by itself when the port is changed. If the port cannot be bound, the
+  service logs why and playback continues with manifests as published.
 
 ## Limitations
 
 * **Available formats come from yt-dlp, not from this add-on.** Which resolutions and codecs
-  a given video offers is decided by yt-dlp and by what YouTube publishes for it. This add-on
-  only passes the resulting manifest to InputStream Adaptive.
+  a given video offers is decided by yt-dlp and by what YouTube publishes for it. The settings
+  above can only narrow that list, never extend it.
+* **Only the manifest is served locally.** The rewritten playlist sits in Kodi's temp
+  directory and is served from `127.0.0.1`; the segment URLs inside it are YouTube's absolute
+  ones, so no media is proxied. Look for `manifest server listening on` and `playing a
+  filtered manifest from` in Kodi's log to confirm the path is in use.
 * **VOD only in practice.** Live streams work, but seeking backwards is limited to whatever
   DVR window the broadcaster provides — a server-side limit, not one imposed here.
 * **JavaScript runtime.** yt-dlp warns that YouTube extraction without a JS runtime (deno,

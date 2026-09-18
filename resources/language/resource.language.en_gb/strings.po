@@ -41,3 +41,171 @@ msgstr ""
 msgctxt "#30104"
 msgid "InputStream Adaptive 21 detects HLS from the mime type. Enable this only if playback fails with a manifest type error on an older build."
 msgstr ""
+
+msgctxt "#30110"
+msgid "Picture & sound"
+msgstr ""
+
+msgctxt "#30111"
+msgid "Maximum resolution"
+msgstr ""
+
+msgctxt "#30112"
+msgid "Variants above this height are removed from the manifest before InputStream Adaptive sees it. \"No limit\" leaves the choice to its adaptive logic."
+msgstr ""
+
+msgctxt "#30113"
+msgid "No limit"
+msgstr ""
+
+msgctxt "#30114"
+msgid "2160p (4K)"
+msgstr ""
+
+msgctxt "#30115"
+msgid "1440p"
+msgstr ""
+
+msgctxt "#30116"
+msgid "1080p"
+msgstr ""
+
+msgctxt "#30117"
+msgid "720p"
+msgstr ""
+
+msgctxt "#30118"
+msgid "480p"
+msgstr ""
+
+msgctxt "#30119"
+msgid "Video codec"
+msgstr ""
+
+msgctxt "#30120"
+msgid "YouTube offers H.264 and VP9 up to 1080p and VP9 alone above it. \"H.264 only\" caps playback at 1080p; \"VP9 only\" needs hardware VP9 decoding. A choice that would leave nothing to play is ignored."
+msgstr ""
+
+msgctxt "#30121"
+msgid "Auto"
+msgstr ""
+
+msgctxt "#30122"
+msgid "H.264 only"
+msgstr ""
+
+msgctxt "#30123"
+msgid "VP9 only"
+msgstr ""
+
+msgctxt "#30124"
+msgid "Audio track"
+msgstr ""
+
+msgctxt "#30125"
+msgid "InputStream Adaptive on Kodi 21 starts YouTube's packed-ADTS audio silent until the first seek. \"fMP4 (fixed)\" replaces it with YouTube's DASH AAC track in fMP4, read by the same demuxer as the video, so sound plays from the first frame. \"As published\" keeps YouTube's own audio (silent-until-seek) for diagnosis."
+msgstr ""
+
+msgctxt "#30126"
+msgid "fMP4 (fixed)"
+msgstr ""
+
+msgctxt "#30127"
+msgid "As published"
+msgstr ""
+
+msgctxt "#30128"
+msgid "HE-AAC"
+msgstr ""
+
+msgctxt "#30129"
+msgid "Skip auto-dubbed audio tracks"
+msgstr ""
+
+msgctxt "#30130"
+msgid "YouTube adds machine-dubbed tracks in other languages, none of them marked as default. Removing them leaves the original track, so Kodi cannot land on a dub because its interface language happened to match."
+msgstr ""
+
+msgctxt "#30131"
+msgid "Flag the original audio track"
+msgstr ""
+
+msgctxt "#30132"
+msgid "Tells InputStream Adaptive which track is the original language. Whether Kodi then prefers it is decided by the audio language setting in Kodi's own player settings."
+msgstr ""
+
+msgctxt "#30140"
+msgid "Subtitles"
+msgstr ""
+
+msgctxt "#30141"
+msgid "Load subtitles"
+msgstr ""
+
+msgctxt "#30142"
+msgid "Uploaded subtitles come from the video's author. Automatic ones are YouTube's speech recognition, and in any language other than the original they are a machine translation of it."
+msgstr ""
+
+msgctxt "#30143"
+msgid "Off"
+msgstr ""
+
+msgctxt "#30144"
+msgid "Uploaded only"
+msgstr ""
+
+msgctxt "#30145"
+msgid "Uploaded, else automatic"
+msgstr ""
+
+msgctxt "#30146"
+msgid "Uploaded and automatic"
+msgstr ""
+
+msgctxt "#30147"
+msgid "Languages"
+msgstr ""
+
+msgctxt "#30148"
+msgid "Comma-separated language codes, for example \"pl, en\". Leave empty to use Kodi's interface language."
+msgstr ""
+
+msgctxt "#30150"
+msgid "Rewrite the manifest (enables the settings below)"
+msgstr ""
+
+msgctxt "#30151"
+msgid "The settings below work by rewriting YouTube's HLS master playlist and serving the copy from 127.0.0.1 to InputStream Adaptive. Switch this off to hand over YouTube's manifest untouched, exactly as version 1.0 did — no rewriting, no local server."
+msgstr ""
+
+msgctxt "#30152"
+msgid "Quality selection"
+msgstr ""
+
+msgctxt "#30153"
+msgid "\"Adaptive\" keeps every allowed variant and lets InputStream Adaptive switch by measured bandwidth. \"Best available\" keeps only the tallest, highest-bitrate variant that passed the codec and resolution settings, so it plays at that quality from the first second — and buffers rather than adapts if the connection cannot carry it."
+msgstr ""
+
+msgctxt "#30154"
+msgid "Adaptive"
+msgstr ""
+
+msgctxt "#30155"
+msgid "Best available"
+msgstr ""
+
+msgctxt "#30156"
+msgid "Local manifest server port"
+msgstr ""
+
+msgctxt "#30157"
+msgid "Rewritten manifests are served to InputStream Adaptive from 127.0.0.1 on this port. Change it only if another add-on already uses it (plugin.video.youtube uses 50152); the server restarts on its own."
+msgstr ""
+
+msgctxt "#30158"
+msgid "Seek once at start to wake the audio"
+msgstr ""
+
+msgctxt "#30159"
+msgid "Workaround: with YouTube's HLS (fMP4 video, packed AAC audio) InputStream Adaptive can start the picture with no sound until the first seek. When on, the add-on's service performs a zero-length seek to the current position as soon as playback starts. Switch off if your build does not show the problem."
+msgstr ""

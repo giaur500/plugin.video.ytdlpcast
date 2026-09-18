@@ -1,6 +1,113 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings version="1">
     <section id="plugin.video.ytdlpcast">
+        <category id="picture_sound" label="30110">
+            <group id="1" label="30110">
+                <setting id="rewrite_manifest" type="boolean" label="30150" help="30151">
+                    <level>1</level>
+                    <default>true</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="max_height" type="integer" label="30111" help="30112">
+                    <dependencies>
+                        <dependency type="enable" setting="rewrite_manifest">true</dependency>
+                    </dependencies>
+                    <level>1</level>
+                    <default>0</default>
+                    <constraints>
+                        <options>
+                            <option label="30113">0</option>
+                            <option label="30114">2160</option>
+                            <option label="30115">1440</option>
+                            <option label="30116">1080</option>
+                            <option label="30117">720</option>
+                            <option label="30118">480</option>
+                        </options>
+                    </constraints>
+                    <control type="list" format="integer">
+                        <heading>30111</heading>
+                    </control>
+                </setting>
+                <setting id="video_codec" type="integer" label="30119" help="30120">
+                    <level>1</level>
+                    <dependencies>
+                        <dependency type="enable" setting="rewrite_manifest">true</dependency>
+                    </dependencies>
+                    <default>0</default>
+                    <constraints>
+                        <options>
+                            <option label="30121">0</option>
+                            <option label="30122">1</option>
+                            <option label="30123">2</option>
+                        </options>
+                    </constraints>
+                    <control type="list" format="integer">
+                        <heading>30119</heading>
+                    </control>
+                </setting>
+                <setting id="quality_mode" type="integer" label="30152" help="30153">
+                    <level>1</level>
+                    <default>0</default>
+                    <dependencies>
+                        <dependency type="enable" setting="rewrite_manifest">true</dependency>
+                    </dependencies>
+                    <constraints>
+                        <options>
+                            <option label="30154">0</option>
+                            <option label="30155">1</option>
+                        </options>
+                    </constraints>
+                    <control type="list" format="integer">
+                        <heading>30152</heading>
+                    </control>
+                </setting>
+                <setting id="audio_mode" type="integer" label="30124" help="30125">
+                    <level>1</level>
+                    <dependencies>
+                        <dependency type="enable" setting="rewrite_manifest">true</dependency>
+                    </dependencies>
+                    <default>0</default>
+                    <constraints>
+                        <options>
+                            <option label="30126">0</option>
+                            <option label="30127">1</option>
+                        </options>
+                    </constraints>
+                    <control type="list" format="integer">
+                        <heading>30124</heading>
+                    </control>
+                </setting>
+            </group>
+        </category>
+        <category id="subtitles" label="30140">
+            <group id="1" label="30140">
+                <setting id="subtitles_mode" type="integer" label="30141" help="30142">
+                    <level>1</level>
+                    <default>1</default>
+                    <constraints>
+                        <options>
+                            <option label="30143">0</option>
+                            <option label="30144">1</option>
+                            <option label="30145">2</option>
+                            <option label="30146">3</option>
+                        </options>
+                    </constraints>
+                    <control type="list" format="integer">
+                        <heading>30141</heading>
+                    </control>
+                </setting>
+                <setting id="subtitles_langs" type="string" label="30147" help="30148">
+                    <level>1</level>
+                    <default></default>
+                    <constraints>
+                        <allowempty>true</allowempty>
+                    </constraints>
+                    <control type="edit" format="string">
+                        <heading>30147</heading>
+                    </control>
+                </setting>
+            </group>
+        </category>
         <category id="playback" label="30100">
             <group id="1">
                 <setting id="allow_progressive" type="boolean" label="30101" help="30102">
@@ -12,6 +119,17 @@
                     <level>2</level>
                     <default>false</default>
                     <control type="toggle"/>
+                </setting>
+                <setting id="http_port" type="integer" label="30156" help="30157">
+                    <level>2</level>
+                    <default>50153</default>
+                    <constraints>
+                        <minimum>1024</minimum>
+                        <maximum>65535</maximum>
+                    </constraints>
+                    <control type="edit" format="integer">
+                        <heading>30156</heading>
+                    </control>
                 </setting>
             </group>
         </category>
