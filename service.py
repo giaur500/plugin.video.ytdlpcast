@@ -46,11 +46,14 @@ class Service(xbmc.Monitor):
     def __init__(self):
         super().__init__()
         self.root = paths.manifest_directory()
-        for stale in glob.glob(os.path.join(self.root, "*.m3u8")):
-            try:
-                os.remove(stale)
-            except OSError:
-                pass
+        # Rewritten manifests and downloaded subtitles are per-playback scratch;
+        # anything left from a previous run is stale.
+        for pattern in ("*.m3u8", "*.srt"):
+            for stale in glob.glob(os.path.join(self.root, pattern)):
+                try:
+                    os.remove(stale)
+                except OSError:
+                    pass
         self.port = configured_port()
         self.server = start_server(self.root, self.port)
 

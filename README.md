@@ -124,6 +124,18 @@ failed, nothing changed — the add-on hands over YouTube's original URL, exactl
   language. Only these are loaded, never YouTube's full list of 150+ machine-translated
   tracks.
 
+Subtitles are downloaded before playback into Kodi's temp directory as
+`<video id>.<lang>.srt` and handed to the player as local files. Kodi reads the language from
+that file name, so they appear in the OSD subtitle menu already labelled, selectable and
+switchable, without any folder browsing — `setSubtitles()` attaches them to the playing item
+rather than making Kodi search anywhere.
+
+One limit is YouTube's, not ours: the original transcript downloads fine, but machine
+*translations* of it (the `tlang=` tracks) answer HTTP 429 for every request after the first,
+regardless of headers or backoff. Such a language is skipped with a warning in the log and the
+ones that worked are still offered — previously Kodi fetched those URLs itself and the
+subtitles simply never appeared, with nothing in the log.
+
 ### Playback
 
 * **Fall back to a progressive stream** — if no HLS manifest is offered, play the best single

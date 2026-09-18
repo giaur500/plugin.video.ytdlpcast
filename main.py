@@ -116,6 +116,50 @@ def build_audio_playlist(info, out_dir, name):
     return audio_name, language
 
 
+def safe_name(video_id):
+    return re.sub(r"[^A-Za-z0-9_-]", "_", video_id or "video")
+
+
+def download_subtitles(info, name):
+    """Save the selected subtitles as local files; return their paths.
+
+    Kodi reads the language from the file name: CUtil::GetExternalStreamDetailsFromFilename
+    strips the video's base name, splits the rest on " .-" and walks the tokens
+    backwards until one converts to an ISO code. Naming them
+    "<video id>.<lang>.srt" therefore labels them properly in the OSD, whether
+    or not the prefix matches the stream's own name.
+
+    Handing Kodi local files instead of the raw timedtext URLs also means a
+    track YouTube refuses is noticed here and logged, rather than silently
+    never appearing.
+    """
+    wanted = resolver.pick_subtitles(
+        info, subtitle_languages(), ADDON.getSettingInt("subtitles_mode"))
+    if not wanted:
+        return []
+
+    out_dir = paths.manifest_directory()
+    paths_out = []
+    for language, url in wanted:
+        target = os.path.join(out_dir, "{}.{}.srt".format(name, language))
+        try:
+            data = resolver.fetch_subtitle(url)
+        except resolver.SubtitleUnavailable as refused:
+            # Typically a machine translation (tlang=), which YouTube throttles.
+            log("subtitles: {} refused by YouTube ({}), skipping".format(language, refused),
+                xbmc.LOGWARNING)
+            continue
+        except Exception as error:  # noqa: BLE001 - one bad track must not stop playback
+            log("subtitles: {} failed ({}: {}), skipping".format(
+                language, type(error).__name__, error), xbmc.LOGWARNING)
+            continue
+        with xbmcvfs.File(target, "w") as handle:
+            handle.write(data)
+        paths_out.append(target)
+        log("subtitles: {} saved to {}".format(language, target))
+    return paths_out
+
+
 def apply_manifest_filters(info, url, headers, video_id):
     """Rewrite the master playlist according to the settings.
 
@@ -148,7 +192,7 @@ def apply_manifest_filters(info, url, headers, video_id):
         quality=ADDON.getSettingInt("quality_mode"))
 
     out_dir = paths.manifest_directory()
-    name = re.sub(r"[^A-Za-z0-9_-]", "_", video_id or "video")
+    name = safe_name(video_id)
 
     audio_changed = False
     if ADDON.getSettingInt("audio_mode") == AUDIO_FMP4:
@@ -222,11 +266,9 @@ def main():
         if ADDON.getSettingBool("legacy_manifest_type"):
             item.setProperty("inputstream.adaptive.manifest_type", "hls")
 
-    subtitles = resolver.pick_subtitles(
-        info, subtitle_languages(), ADDON.getSettingInt("subtitles_mode"))
-    if subtitles:
-        item.setSubtitles([url for _, url in subtitles])
-        log("subtitles: {}".format(", ".join(language for language, _ in subtitles)))
+    subtitle_files = download_subtitles(info, safe_name(video_id or info.get("id")))
+    if subtitle_files:
+        item.setSubtitles(subtitle_files)
 
     tag = item.getVideoInfoTag()
     tag.setTitle(info.get("title") or "")

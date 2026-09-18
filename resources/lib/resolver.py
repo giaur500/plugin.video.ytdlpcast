@@ -6,6 +6,7 @@ desktop with scripts/test-resolver.py, without a running Kodi.
 """
 
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -350,6 +351,28 @@ def _best_track(table, language):
                 if track.get("ext") == extension and track.get("url"):
                     return track["url"]
     return None
+
+
+class SubtitleUnavailable(Exception):
+    """YouTube refused this subtitle track; the others may still work."""
+
+
+def fetch_subtitle(url, headers=None, timeout=20):
+    """Bytes of one subtitle file.
+
+    YouTube rate-limits the timedtext endpoint hard: the original transcript
+    downloads fine, but machine-translated tracks (tlang=) answer 429 for every
+    request after the first, regardless of headers or backoff. Raising a
+    distinct error lets the caller drop that language and keep the rest.
+    """
+    request = urllib.request.Request(url, headers=dict(headers or {}))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        if error.code in (429, 403):
+            raise SubtitleUnavailable("HTTP {}".format(error.code)) from error
+        raise
 
 
 def pick_subtitles(info, languages, mode):
