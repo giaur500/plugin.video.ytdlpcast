@@ -36,24 +36,45 @@ play it" approach does not work. The HLS manifest is what makes a single-URL han
 
 | add-on | why |
 |---|---|
-| `script.module.yt-dlp` | the extractor |
 | `inputstream.adaptive` | the demuxer; built into CoreELEC and LibreELEC |
-| `script.module.certifi` | yt-dlp's only external dependency, in the official Kodi repository |
+| `script.module.certifi` | the CA bundle for HTTPS, in the official Kodi repository |
+
+yt-dlp itself is **not** a dependency: the add-on ships a copy and keeps it current on its own.
 
 ## Installation
 
-Install from zip, dependencies first: `script.module.certifi`, then `script.module.yt-dlp`,
-then this add-on.
+Install from zip: `script.module.certifi` first, then this add-on.
 
-`script.module.yt-dlp` is published by [lekma](https://github.com/lekma/script.module.yt-dlp)
-and available through [lekma's repository](https://github.com/lekma/repository.lekma).
+## Keeping yt-dlp current
 
-### Keeping yt-dlp current
+A stale yt-dlp is the one thing that reliably breaks playback, because YouTube keeps changing
+what extraction has to cope with. So the add-on updates yt-dlp itself, straight from the yt-dlp
+project — no third-party Kodi module, no repository to keep enabled.
 
-This is not a nicety. A stale yt-dlp is the one thing that reliably breaks playback, because
-YouTube keeps changing what extraction has to cope with. Install `script.module.yt-dlp` from
-a repository and leave add-on auto-updates enabled. If you install it from a zip instead,
-Kodi will never update it and refreshing it becomes your job.
+yt-dlp's release asset named plain `yt-dlp` is not a native binary: it is a shebang line
+followed by a ZIP of the package's Python sources, which Python can import directly. The add-on
+downloads that file, checks it, and puts it on `sys.path`.
+
+* **When**: a minute after Kodi starts, then once a day, in the background service — never
+  during playback. **Settings → yt-dlp → Check for updates now** checks immediately.
+* **Channel**: *Nightly* (default) is built every day from the project's main branch, and
+  fixes for YouTube changes land there first. *Stable* is released less often; yt-dlp promises
+  a release at least every 90 days.
+* **Checks before a new file is used** — nothing from it is executed:
+  the SHA-256 against the release's own `SHA2-256SUMS`; the minimum Python it declares; and a
+  parse of every source file with the running interpreter's grammar. A release that fails is
+  rejected, remembered so it is not downloaded again, and the current version stays.
+* **Why the Python check matters**: Kodi 21 ships Python 3.11, and yt-dlp drops old Pythons
+  over time (3.9 went in 2025-10). When it drops 3.11, the add-on keeps the last compatible
+  version instead of downloading one that cannot run — playback keeps working, it just stops
+  getting fresher, and the log says so.
+* **Storage**: `addon_data/plugin.video.ytdlpcast/ytdlp/`, one file per version, never
+  overwritten in place (zipimport caches a ZIP's directory per path), current and previous
+  kept. The copy shipped in the add-on (stable) is used until the first download succeeds, so
+  the very first playback works offline too.
+
+The checksum guards against a corrupted download, not against a compromised release: trust
+ends at the yt-dlp project's GitHub releases, as it did with any repackaged module.
 
 ## Usage
 

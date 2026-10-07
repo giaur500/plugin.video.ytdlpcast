@@ -88,6 +88,35 @@
                 </setting>
             </group>
         </category>
+        <category id="ytdlp" label="30160">
+            <group id="1" label="30160">
+                <setting id="ytdlp_channel" type="integer" label="30161" help="30162">
+                    <level>0</level>
+                    <default>0</default>
+                    <constraints>
+                        <options>
+                            <option label="30163">0</option>
+                            <option label="30164">1</option>
+                        </options>
+                    </constraints>
+                    <control type="list" format="integer">
+                        <heading>30161</heading>
+                    </control>
+                </setting>
+                <setting id="ytdlp_auto_update" type="boolean" label="30165" help="30166">
+                    <level>0</level>
+                    <default>true</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="ytdlp_check_now" type="action" label="30167" help="30168">
+                    <level>0</level>
+                    <data>RunPlugin(plugin://plugin.video.ytdlpcast/?action=update_ytdlp)</data>
+                    <control type="button" format="action">
+                        <close>true</close>
+                    </control>
+                </setting>
+            </group>
+        </category>
         <category id="playback" label="30100">
             <group id="1">
                 <setting id="allow_progressive" type="boolean" label="30101" help="30102">

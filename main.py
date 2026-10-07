@@ -20,7 +20,7 @@ import xbmcgui
 import xbmcplugin
 import xbmcvfs
 
-from resources.lib import manifest_server, mp4index, paths, resolver
+from resources.lib import manifest_server, mp4index, paths, resolver, ytdlp_loader
 
 ADDON = xbmcaddon.Addon()
 ADDON_ID = ADDON.getAddonInfo("id")
@@ -104,6 +104,51 @@ def build_audio_playlist(info, out_dir, name):
     with xbmcvfs.File(os.path.join(out_dir, audio_name), "w") as handle:
         handle.write(playlist)
     return audio_name, language
+
+
+def prepare_ytdlp():
+    """Make yt-dlp importable; return its version, or None if no copy works.
+
+    The downloaded release is preferred. Should importing it fail anyway -- it
+    passed validation, but validation is static -- the copy shipped inside the
+    add-on is used instead, so a bad download cannot stop playback.
+    """
+    version, source = ytdlp_loader.activate(paths.ytdlp_directory(), paths.bundled_ytdlp())
+    try:
+        import yt_dlp  # noqa: F401 - imported for its side effect of loading
+        log("yt-dlp {} ({})".format(version, source))
+        return version
+    except Exception as error:  # noqa: BLE001 - any import failure means the same
+        if source == "bundled":
+            log("BUG: the bundled yt-dlp does not import ({}: {})".format(
+                type(error).__name__, error), xbmc.LOGERROR)
+            return None
+        log("downloaded yt-dlp {} does not import ({}: {}); using the bundled copy".format(
+            version, type(error).__name__, error), xbmc.LOGERROR)
+    for name in [name for name in sys.modules if name == "yt_dlp" or name.startswith("yt_dlp.")]:
+        del sys.modules[name]
+    version, _ = ytdlp_loader.activate_bundled(paths.bundled_ytdlp())
+    import yt_dlp  # noqa: F401,F811
+    log("yt-dlp {} (bundled, fallback)".format(version))
+    return version
+
+
+def update_ytdlp_now():
+    """Settings button: check the configured channel right away and report."""
+    channel = ytdlp_loader.SETTING_CHANNELS[ADDON.getSettingInt("ytdlp_channel")]
+    notify = xbmcgui.Dialog().notification
+    notify(ADDON_NAME, ADDON.getLocalizedString(30174), xbmcgui.NOTIFICATION_INFO, 3000)
+    result = ytdlp_loader.update(paths.ytdlp_directory(), channel)
+    log("manual yt-dlp update on {}: {}".format(channel, result))
+    if result.status == ytdlp_loader.UPDATED:
+        message, icon = ADDON.getLocalizedString(30171).format(result.version), xbmcgui.NOTIFICATION_INFO
+    elif result.status == ytdlp_loader.UP_TO_DATE:
+        message, icon = ADDON.getLocalizedString(30170).format(result.version), xbmcgui.NOTIFICATION_INFO
+    elif result.status in (ytdlp_loader.REJECTED, ytdlp_loader.SKIPPED):
+        message, icon = ADDON.getLocalizedString(30172).format(result.reason), xbmcgui.NOTIFICATION_WARNING
+    else:
+        message, icon = ADDON.getLocalizedString(30173).format(result.reason), xbmcgui.NOTIFICATION_ERROR
+    notify(ADDON_NAME, message, icon, 6000)
 
 
 def show_settings():
@@ -221,10 +266,17 @@ def main():
     params = dict(urllib.parse.parse_qsl(sys.argv[2].lstrip("?")))
     log("called with {}".format(params))
 
+    # The settings button, not a playback request -- handled before anything else.
+    if params.get("action") == "update_ytdlp":
+        return update_ytdlp_now()
+
     video_id = params.get("video_id")
     url = params.get("url") or (resolver.watch_url(video_id) if video_id else None)
     if not url:
         return show_settings()
+
+    if not prepare_ytdlp():
+        return fail(30011)
 
     # TubeCast sends "seek"; Tubed calls the same thing "start_offset".
     seek = as_seconds(params.get("seek") or params.get("start_offset"))

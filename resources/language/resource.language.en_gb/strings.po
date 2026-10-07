@@ -162,3 +162,59 @@ msgstr ""
 msgctxt "#30157"
 msgid "Rewritten manifests are served to InputStream Adaptive from 127.0.0.1 on this port. Change it only if another add-on already uses it (plugin.video.youtube uses 50152); the server restarts on its own."
 msgstr ""
+
+msgctxt "#30160"
+msgid "yt-dlp"
+msgstr ""
+
+msgctxt "#30161"
+msgid "Update channel"
+msgstr ""
+
+msgctxt "#30162"
+msgid "Where new yt-dlp versions come from. Nightly is built every day from the project's main branch, and fixes for YouTube changes arrive there first. Stable is released less often (yt-dlp promises a release at least every 90 days). After switching, use \"Check for updates now\"."
+msgstr ""
+
+msgctxt "#30163"
+msgid "Nightly"
+msgstr ""
+
+msgctxt "#30164"
+msgid "Stable"
+msgstr ""
+
+msgctxt "#30165"
+msgid "Update automatically"
+msgstr ""
+
+msgctxt "#30166"
+msgid "Checks for a new yt-dlp a minute after Kodi starts and then once a day, in the background. A new version is used only after it has been checked against Kodi's Python: one that needs a newer Python is rejected and the current one stays."
+msgstr ""
+
+msgctxt "#30167"
+msgid "Check for updates now"
+msgstr ""
+
+msgctxt "#30168"
+msgid "Checks the selected channel right away and shows the result."
+msgstr ""
+
+msgctxt "#30170"
+msgid "yt-dlp {} is up to date"
+msgstr ""
+
+msgctxt "#30171"
+msgid "yt-dlp updated to {}"
+msgstr ""
+
+msgctxt "#30172"
+msgid "yt-dlp update not applied: {}"
+msgstr ""
+
+msgctxt "#30173"
+msgid "yt-dlp update failed: {}"
+msgstr ""
+
+msgctxt "#30174"
+msgid "Checking for yt-dlp updates…"
+msgstr ""

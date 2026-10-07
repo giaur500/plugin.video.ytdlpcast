@@ -10,7 +10,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from yt_dlp import YoutubeDL
 
 from . import mp4index
 
@@ -26,6 +25,10 @@ def watch_url(video_id):
 
 
 def extract(url):
+    # Imported here, not at module level: the plugin first puts the right yt-dlp
+    # on sys.path (ytdlp_loader.activate), and only then may it be imported.
+    from yt_dlp import YoutubeDL
+
     options = {
         "quiet": True,
         "no_warnings": True,

@@ -1,22 +1,31 @@
 # -*- coding: utf-8 -*-
-"""Kodi service: keeps the manifest HTTP server up for as long as Kodi runs.
+"""Kodi service: the manifest HTTP server and the yt-dlp updater.
 
 The plugin script that resolves a video exits as soon as it has handed the
 ListItem to Kodi, so it cannot host the server itself. This service starts it
 at Kodi launch, restarts it when the port setting changes, and stops it on
-shutdown. If the port cannot be bound the service logs why and ends; the plugin
-notices the missing server and plays manifests as published instead.
+shutdown. If the port cannot be bound the service logs why; the plugin notices
+the missing server and plays manifests as published instead.
+
+It also keeps yt-dlp current: a first check shortly after Kodi starts, then one
+a day. Updating happens here, never during playback, so a download or the
+validation of a new release cannot delay a cast.
 """
 
 import glob
 import os
+import time
 
 import xbmc
 import xbmcaddon
 
-from resources.lib import manifest_server, paths
+from resources.lib import manifest_server, paths, ytdlp_loader
 
 ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
+
+# Give Kodi time to finish starting before the first network request.
+FIRST_CHECK_DELAY = 60
+CHECK_INTERVAL = 24 * 60 * 60
 
 
 
@@ -67,8 +76,32 @@ class Service(xbmc.Monitor):
         self.port = port
         self.server = start_server(self.root, port)
 
+    def check_ytdlp(self):
+        addon = xbmcaddon.Addon()  # fresh: settings may have changed since start
+        if not addon.getSettingBool("ytdlp_auto_update"):
+            return
+        channel = ytdlp_loader.SETTING_CHANNELS[addon.getSettingInt("ytdlp_channel")]
+        started = time.time()
+        try:
+            result = ytdlp_loader.update(paths.ytdlp_directory(), channel)
+        except Exception as error:  # noqa: BLE001 - the service must outlive any update
+            log("yt-dlp update crashed ({}: {})".format(type(error).__name__, error), xbmc.LOGERROR)
+            return
+        took = time.time() - started
+        if result.status == ytdlp_loader.REJECTED:
+            # Typically a release that needs a newer Python than Kodi ships.
+            log("yt-dlp {} release rejected, staying on the current version: {}".format(
+                channel, result.reason), xbmc.LOGWARNING)
+        elif result.status == ytdlp_loader.FAILED:
+            log("yt-dlp update on {} failed: {}".format(channel, result.reason), xbmc.LOGWARNING)
+        else:
+            log("yt-dlp update on {} took {:.1f}s: {}".format(channel, took, result))
+
     def run(self):
-        self.waitForAbort()
+        wait = FIRST_CHECK_DELAY
+        while not self.waitForAbort(wait):
+            self.check_ytdlp()
+            wait = CHECK_INTERVAL
         if self.server:
             self.server.stop()
             log("manifest server stopped")
