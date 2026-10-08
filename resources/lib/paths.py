@@ -31,3 +31,10 @@ def bundled_ytdlp():
     """The copy shipped inside the add-on, used until a download succeeds."""
     addon_path = xbmcvfs.translatePath(xbmcaddon.Addon().getAddonInfo("path"))
     return os.path.join(addon_path, "resources", "vendor", "yt-dlp.zip")
+
+
+def cast_state_file():
+    """The cast identity (device id, screen, lounge token). Must survive restarts."""
+    profile = xbmcvfs.translatePath(xbmcaddon.Addon().getAddonInfo("profile"))
+    xbmcvfs.mkdirs(profile)
+    return os.path.join(profile, "cast.json")

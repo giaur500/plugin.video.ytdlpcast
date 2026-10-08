@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="plugin.video.ytdlpcast"
-       name="yt-dlp cast player"
-       version="1.2.0"
+       name="yt-dlp Cast"
+       version="2.0.0"
        provider-name="michal">
 
     <requires>
@@ -16,11 +16,18 @@
     <extension point="xbmc.service" library="service.py"/>
 
     <extension point="xbmc.addon.metadata">
-        <summary lang="en_GB">Play YouTube links resolved by yt-dlp through InputStream Adaptive</summary>
-        <description lang="en_GB">Resolves a YouTube video to its HLS master manifest with yt-dlp and hands that single URL to InputStream Adaptive, which gives seeking and bitrate switching without downloading the file. Meant to be selected as TubeCast's playback add-on, but works standalone via plugin://plugin.video.ytdlpcast/?video_id=ID</description>
+        <summary lang="en_GB">Cast YouTube from your phone to Kodi, played through yt-dlp</summary>
+        <summary lang="pl_PL">Przesyłaj YouTube z telefonu do Kodi, odtwarzane przez yt-dlp</summary>
+        <description lang="en_GB">Kodi shows up as a TV in the YouTube app: pick it from the cast menu, or link it once with a TV code. Every video is resolved by yt-dlp, which the add-on keeps current by itself, and played by InputStream Adaptive from YouTube's HLS manifest -- streamed, with seeking and quality switching, nothing downloaded first. No other add-on is needed for casting. Anything else in Kodi can play a video through it with plugin://plugin.video.ytdlpcast/?video_id=ID</description>
+        <description lang="pl_PL">Kodi pojawia się jako telewizor w aplikacji YouTube: wybierz go w menu przesyłania albo połącz raz kodem TV. Każdy film rozwiązuje yt-dlp, który dodatek sam aktualizuje, a odtwarza InputStream Adaptive z manifestu HLS YouTube -- strumieniowo, z przewijaniem i zmianą jakości, bez wcześniejszego pobierania. Do przesyłania nie jest potrzebny żaden inny dodatek. Inne elementy Kodi mogą odtworzyć przez niego film adresem plugin://plugin.video.ytdlpcast/?video_id=ID</description>
+        <news>v2.0.0
+- Receives casts from the YouTube app itself: TubeCast is no longer needed
+- A phone linked with a TV code stays linked across restarts
+- Detailed cast log in kodi.log (search for "cast/"), yt-dlp's own messages included
+- Renamed to "yt-dlp Cast"</news>
         <platform>all</platform>
         <license>MIT</license>
-        <source>https://github.com/</source>
+        <source>https://github.com/giaur500/plugin.video.ytdlpcast</source>
         <assets/>
     </extension>
 </addon>

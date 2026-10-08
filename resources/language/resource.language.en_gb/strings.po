@@ -1,5 +1,5 @@
 # Kodi Media Center language file
-# Addon Name: yt-dlp cast player
+# Addon Name: yt-dlp Cast
 # Addon id: plugin.video.ytdlpcast
 msgid ""
 msgstr ""
@@ -217,4 +217,80 @@ msgstr ""
 
 msgctxt "#30174"
 msgid "Checking for yt-dlp updates…"
+msgstr ""
+
+msgctxt "#30180"
+msgid "Cast"
+msgstr ""
+
+msgctxt "#30181"
+msgid "Receive casts from the YouTube app"
+msgstr ""
+
+msgctxt "#30182"
+msgid "Kodi appears as a TV in the YouTube app on your phone: tap the cast button and pick it. Videos then play here through yt-dlp, and the phone works as the remote. While this is on, Kodi keeps one connection to youtube.com open so the phone can reach it."
+msgstr ""
+
+msgctxt "#30183"
+msgid "Name shown on the phone"
+msgstr ""
+
+msgctxt "#30184"
+msgid "Leave empty for Kodi's own name followed by \"(yt-dlp)\", e.g. \"CoreELEC (yt-dlp)\" — different from what TubeCast shows, should both be installed."
+msgstr ""
+
+msgctxt "#30185"
+msgid "Discoverable on the local network"
+msgstr ""
+
+msgctxt "#30186"
+msgid "Answers the YouTube app's search on the local network (SSDP and DIAL), so Kodi shows up in the cast menu by itself. Switch off to connect only with a TV code."
+msgstr ""
+
+msgctxt "#30187"
+msgid "Link with a TV code"
+msgstr ""
+
+msgctxt "#30188"
+msgid "Shows a code to type into the YouTube app (Settings → Watch on TV → Enter TV code). Works when the phone is on another network, or when the local search does not find Kodi. A linked phone stays linked across restarts."
+msgstr ""
+
+msgctxt "#30189"
+msgid "Detailed cast log"
+msgstr ""
+
+msgctxt "#30190"
+msgid "Writes every step of casting to kodi.log, without Kodi's debug mode: discovery, pairing, each command from the phone and each answer to it. Search the log for \"cast/\". Warnings and errors are logged either way."
+msgstr ""
+
+msgctxt "#30191"
+msgid "{} connected"
+msgstr ""
+
+msgctxt "#30192"
+msgid "{} disconnected"
+msgstr ""
+
+msgctxt "#30193"
+msgid "Casting is switched off in the settings"
+msgstr ""
+
+msgctxt "#30194"
+msgid "Not connected to YouTube yet — try again in a moment"
+msgstr ""
+
+msgctxt "#30195"
+msgid "Could not get a TV code: {}"
+msgstr ""
+
+msgctxt "#30196"
+msgid "In the YouTube app on the phone open Settings → Watch on TV → Enter TV code, and type:"
+msgstr ""
+
+msgctxt "#30197"
+msgid "Phone linked"
+msgstr ""
+
+msgctxt "#30198"
+msgid "TubeCast is enabled as well, so the phone lists two receivers for this box. Disable one of them."
 msgstr ""

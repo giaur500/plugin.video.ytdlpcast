@@ -1,6 +1,54 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings version="1">
     <section id="plugin.video.ytdlpcast">
+        <category id="cast" label="30180">
+            <group id="1" label="30180">
+                <setting id="cast_enabled" type="boolean" label="30181" help="30182">
+                    <level>0</level>
+                    <default>true</default>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="cast_name" type="string" label="30183" help="30184">
+                    <level>0</level>
+                    <default></default>
+                    <constraints>
+                        <allowempty>true</allowempty>
+                    </constraints>
+                    <dependencies>
+                        <dependency type="enable" setting="cast_enabled">true</dependency>
+                    </dependencies>
+                    <control type="edit" format="string">
+                        <heading>30183</heading>
+                    </control>
+                </setting>
+                <setting id="cast_discovery" type="boolean" label="30185" help="30186">
+                    <level>0</level>
+                    <default>true</default>
+                    <dependencies>
+                        <dependency type="enable" setting="cast_enabled">true</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="cast_pair" type="action" label="30187" help="30188">
+                    <level>0</level>
+                    <data>RunPlugin(plugin://plugin.video.ytdlpcast/?action=pair)</data>
+                    <dependencies>
+                        <dependency type="enable" setting="cast_enabled">true</dependency>
+                    </dependencies>
+                    <control type="button" format="action">
+                        <close>true</close>
+                    </control>
+                </setting>
+                <setting id="cast_verbose_log" type="boolean" label="30189" help="30190">
+                    <level>1</level>
+                    <default>true</default>
+                    <dependencies>
+                        <dependency type="enable" setting="cast_enabled">true</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+            </group>
+        </category>
         <category id="picture_sound" label="30110">
             <group id="1" label="30110">
                 <setting id="rewrite_manifest" type="boolean" label="30150" help="30151">

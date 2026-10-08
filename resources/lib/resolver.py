@@ -24,17 +24,24 @@ def watch_url(video_id):
     return "https://www.youtube.com/watch?v={}".format(video_id)
 
 
-def extract(url):
+def extract(url, logger=None):
+    """yt-dlp's info dict for url.
+
+    logger, when given, receives yt-dlp's messages (debug/warning/error, as
+    yt-dlp's logger interface defines them); without one it stays silent.
+    """
     # Imported here, not at module level: the plugin first puts the right yt-dlp
     # on sys.path (ytdlp_loader.activate), and only then may it be imported.
     from yt_dlp import YoutubeDL
 
     options = {
         "quiet": True,
-        "no_warnings": True,
+        "no_warnings": logger is None,
         "noplaylist": True,
         "skip_download": True,
     }
+    if logger is not None:
+        options["logger"] = logger
     with YoutubeDL(options) as ydl:
         return ydl.sanitize_info(ydl.extract_info(url, download=False))
 

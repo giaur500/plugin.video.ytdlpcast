@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Kodi service: the manifest HTTP server and the yt-dlp updater.
+"""Kodi service: the cast receiver, the manifest HTTP server and the yt-dlp updater.
 
 The plugin script that resolves a video exits as soon as it has handed the
-ListItem to Kodi, so it cannot host the server itself. This service starts it
-at Kodi launch, restarts it when the port setting changes, and stops it on
-shutdown. If the port cannot be bound the service logs why; the plugin notices
-the missing server and plays manifests as published instead.
+ListItem to Kodi, so it cannot host anything long-lived. This service does:
 
-It also keeps yt-dlp current: a first check shortly after Kodi starts, then one
-a day. Updating happens here, never during playback, so a download or the
-validation of a new release cannot delay a cast.
+- the cast receiver (resources/lib/cast_kodi.py), so the YouTube app on a phone
+  can find Kodi and send videos to it; restarted when its settings change;
+- the manifest server, started at Kodi launch, restarted when the port setting
+  changes. If the port cannot be bound the service logs why; the plugin notices
+  the missing server and plays manifests as published instead;
+- the yt-dlp updater: a first check shortly after Kodi starts, then one a day.
+  Updating happens here, never during playback, so a download or the validation
+  of a new release cannot delay a cast.
 """
 
 import glob
@@ -19,14 +21,13 @@ import time
 import xbmc
 import xbmcaddon
 
-from resources.lib import manifest_server, paths, ytdlp_loader
+from resources.lib import cast_kodi, manifest_server, paths, ytdlp_loader
 
 ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
 
 # Give Kodi time to finish starting before the first network request.
 FIRST_CHECK_DELAY = 60
 CHECK_INTERVAL = 24 * 60 * 60
-
 
 
 def log(message, level=xbmc.LOGINFO):
@@ -50,7 +51,6 @@ def start_server(root, port):
     return server
 
 
-
 class Service(xbmc.Monitor):
     def __init__(self):
         super().__init__()
@@ -65,16 +65,29 @@ class Service(xbmc.Monitor):
                     pass
         self.port = configured_port()
         self.server = start_server(self.root, self.port)
+        self.cast_settings = cast_kodi.read_settings()
+        self.cast = cast_kodi.start(self.cast_settings)
 
     def onSettingsChanged(self):
         port = configured_port()
-        if port == self.port:
+        if port != self.port:
+            log("manifest server port changed {} -> {}, restarting".format(self.port, port))
+            if self.server:
+                self.server.stop()
+            self.port = port
+            self.server = start_server(self.root, port)
+
+        settings = cast_kodi.read_settings()
+        if settings == self.cast_settings:
             return
-        log("manifest server port changed {} -> {}, restarting".format(self.port, port))
-        if self.server:
-            self.server.stop()
-        self.port = port
-        self.server = start_server(self.root, port)
+        restart = any(settings[key] != self.cast_settings[key] for key in ("enabled", "discovery", "name"))
+        self.cast_settings = settings
+        if restart:
+            log("cast settings changed, restarting the receiver")
+            cast_kodi.stop(self.cast)
+            self.cast = cast_kodi.start(settings)
+        else:
+            cast_kodi.setup_logging(settings["verbose"])
 
     def check_ytdlp(self):
         addon = xbmcaddon.Addon()  # fresh: settings may have changed since start
@@ -102,6 +115,7 @@ class Service(xbmc.Monitor):
         while not self.waitForAbort(wait):
             self.check_ytdlp()
             wait = CHECK_INTERVAL
+        cast_kodi.stop(self.cast)
         if self.server:
             self.server.stop()
             log("manifest server stopped")

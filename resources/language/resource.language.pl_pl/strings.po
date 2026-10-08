@@ -1,5 +1,5 @@
 # Kodi Media Center language file
-# Addon Name: yt-dlp cast player
+# Addon Name: yt-dlp Cast
 # Addon id: plugin.video.ytdlpcast
 msgid ""
 msgstr ""
@@ -213,3 +213,79 @@ msgstr "Aktualizacja yt-dlp nie powiodła się: {}"
 msgctxt "#30174"
 msgid "Checking for yt-dlp updates…"
 msgstr "Sprawdzanie aktualizacji yt-dlp…"
+
+msgctxt "#30180"
+msgid "Cast"
+msgstr "Przesyłanie"
+
+msgctxt "#30181"
+msgid "Receive casts from the YouTube app"
+msgstr "Odbieraj przesyłanie z aplikacji YouTube"
+
+msgctxt "#30182"
+msgid "Kodi appears as a TV in the YouTube app on your phone: tap the cast button and pick it. Videos then play here through yt-dlp, and the phone works as the remote. While this is on, Kodi keeps one connection to youtube.com open so the phone can reach it."
+msgstr "Kodi pojawia się jako telewizor w aplikacji YouTube na telefonie: naciśnij przycisk przesyłania i wybierz go. Filmy grają wtedy tutaj przez yt-dlp, a telefon służy za pilota. Gdy to jest włączone, Kodi utrzymuje jedno połączenie z youtube.com, żeby telefon mógł się do niego dostać."
+
+msgctxt "#30183"
+msgid "Name shown on the phone"
+msgstr "Nazwa widoczna w telefonie"
+
+msgctxt "#30184"
+msgid "Leave empty for Kodi's own name followed by \"(yt-dlp)\", e.g. \"CoreELEC (yt-dlp)\" — different from what TubeCast shows, should both be installed."
+msgstr "Puste pole oznacza nazwę Kodi z dopiskiem „(yt-dlp)”, np. „CoreELEC (yt-dlp)” — inną niż ta, którą pokazuje TubeCast, gdyby oba były zainstalowane."
+
+msgctxt "#30185"
+msgid "Discoverable on the local network"
+msgstr "Widoczny w sieci lokalnej"
+
+msgctxt "#30186"
+msgid "Answers the YouTube app's search on the local network (SSDP and DIAL), so Kodi shows up in the cast menu by itself. Switch off to connect only with a TV code."
+msgstr "Odpowiada na wyszukiwanie aplikacji YouTube w sieci lokalnej (SSDP i DIAL), więc Kodi sam pojawia się w menu przesyłania. Wyłącz, by łączyć się wyłącznie kodem TV."
+
+msgctxt "#30187"
+msgid "Link with a TV code"
+msgstr "Połącz kodem TV"
+
+msgctxt "#30188"
+msgid "Shows a code to type into the YouTube app (Settings → Watch on TV → Enter TV code). Works when the phone is on another network, or when the local search does not find Kodi. A linked phone stays linked across restarts."
+msgstr "Pokazuje kod do wpisania w aplikacji YouTube (Ustawienia → Oglądaj na telewizorze → Wpisz kod TV). Działa, gdy telefon jest w innej sieci albo gdy wyszukiwanie w sieci lokalnej nie znajduje Kodi. Połączony telefon pozostaje połączony po restarcie."
+
+msgctxt "#30189"
+msgid "Detailed cast log"
+msgstr "Szczegółowy log przesyłania"
+
+msgctxt "#30190"
+msgid "Writes every step of casting to kodi.log, without Kodi's debug mode: discovery, pairing, each command from the phone and each answer to it. Search the log for \"cast/\". Warnings and errors are logged either way."
+msgstr "Zapisuje każdy krok przesyłania do kodi.log, bez trybu debugowania Kodi: wykrywanie, parowanie, każdą komendę z telefonu i każdą odpowiedź. Szukaj w logu „cast/”. Ostrzeżenia i błędy są zapisywane zawsze."
+
+msgctxt "#30191"
+msgid "{} connected"
+msgstr "Połączono: {}"
+
+msgctxt "#30192"
+msgid "{} disconnected"
+msgstr "Rozłączono: {}"
+
+msgctxt "#30193"
+msgid "Casting is switched off in the settings"
+msgstr "Przesyłanie jest wyłączone w ustawieniach"
+
+msgctxt "#30194"
+msgid "Not connected to YouTube yet — try again in a moment"
+msgstr "Jeszcze brak połączenia z YouTube — spróbuj za chwilę"
+
+msgctxt "#30195"
+msgid "Could not get a TV code: {}"
+msgstr "Nie udało się pobrać kodu TV: {}"
+
+msgctxt "#30196"
+msgid "In the YouTube app on the phone open Settings → Watch on TV → Enter TV code, and type:"
+msgstr "W aplikacji YouTube na telefonie otwórz Ustawienia → Oglądaj na telewizorze → Wpisz kod TV i wpisz:"
+
+msgctxt "#30197"
+msgid "Phone linked"
+msgstr "Telefon połączony"
+
+msgctxt "#30198"
+msgid "TubeCast is enabled as well, so the phone lists two receivers for this box. Disable one of them."
+msgstr "TubeCast też jest włączony, więc telefon pokaże dwa odbiorniki dla tego urządzenia. Wyłącz jeden z nich."

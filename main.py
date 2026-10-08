@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """Entry point.
 
-Called as plugin://plugin.video.ytdlpcast/?video_id=ID&seek=SECONDS -- the same
-shape TubeCast already uses for the YouTube add-on, so the fork only has to
-change the plugin id in the URL it builds.
+Called as plugin://plugin.video.ytdlpcast/?video_id=ID&seek=SECONDS -- by the
+add-on's own cast receiver (which adds &cast=NONCE, see cast_kodi.KodiPlayback),
+or by anything else that wants a YouTube video played through yt-dlp. Without a
+video it opens the settings; ?action=update_ytdlp and ?action=pair are the
+settings buttons.
 """
 
 import os
@@ -20,25 +22,60 @@ import xbmcgui
 import xbmcplugin
 import xbmcvfs
 
-from resources.lib import manifest_server, mp4index, paths, resolver, ytdlp_loader
+from resources.lib import cast_kodi, manifest_server, mp4index, paths, resolver, ytdlp_loader
 
 ADDON = xbmcaddon.Addon()
 ADDON_ID = ADDON.getAddonInfo("id")
 ADDON_NAME = ADDON.getAddonInfo("name")
 HANDLE = int(sys.argv[1])
 
+# Set when the cast receiver asked for this playback: it waits to hear how
+# resolving went (cast_kodi.KodiPlayback.resolution).
+CAST_NONCE = None
+
 
 def log(message, level=xbmc.LOGINFO):
     xbmc.log("[{}] {}".format(ADDON_ID, message), level)
 
 
+class YtdlpLog:
+    """yt-dlp's own messages, into kodi.log.
+
+    Its progress lines ("[youtube] ID: Downloading ...") go to INFO, so that a
+    failed extraction shows how far it got without enabling Kodi's debug log;
+    its debug lines to DEBUG; warnings and errors as such.
+    """
+
+    @staticmethod
+    def debug(message):
+        log("yt-dlp: " + message, xbmc.LOGDEBUG if message.startswith("[debug] ") else xbmc.LOGINFO)
+
+    @staticmethod
+    def info(message):
+        log("yt-dlp: " + message)
+
+    @staticmethod
+    def warning(message):
+        log("yt-dlp: " + message, xbmc.LOGWARNING)
+
+    @staticmethod
+    def error(message):
+        log("yt-dlp: " + message, xbmc.LOGERROR)
+
+
+def report_to_cast(result):
+    if CAST_NONCE:
+        cast_kodi.mark_resolved(CAST_NONCE, result)
+
+
 def fail(message_id):
     """Tell Kodi the item is unplayable, and say why on screen.
 
-    Resolving to False matters: TubeCast waits on the player and would otherwise
-    sit there with the phone showing a video that never starts.
+    Resolving to False matters, and so does telling the cast receiver: the phone
+    would otherwise keep showing a video that never starts.
     """
     log(ADDON.getLocalizedString(message_id), xbmc.LOGERROR)
+    report_to_cast("failed: " + ADDON.getLocalizedString(message_id))
     xbmcgui.Dialog().notification(
         ADDON_NAME, ADDON.getLocalizedString(message_id), xbmcgui.NOTIFICATION_ERROR
     )
@@ -263,12 +300,16 @@ def apply_manifest_filters(info, url, headers, video_id):
 
 
 def main():
+    global CAST_NONCE
     params = dict(urllib.parse.parse_qsl(sys.argv[2].lstrip("?")))
     log("called with {}".format(params))
+    CAST_NONCE = params.get("cast")
 
-    # The settings button, not a playback request -- handled before anything else.
+    # The settings buttons, not playback requests -- handled before anything else.
     if params.get("action") == "update_ytdlp":
         return update_ytdlp_now()
+    if params.get("action") == "pair":
+        return cast_kodi.pair_with_tv_code()
 
     video_id = params.get("video_id")
     url = params.get("url") or (resolver.watch_url(video_id) if video_id else None)
@@ -278,13 +319,13 @@ def main():
     if not prepare_ytdlp():
         return fail(30011)
 
-    # TubeCast sends "seek"; Tubed calls the same thing "start_offset".
+    # The receiver sends "seek"; Tubed calls the same thing "start_offset".
     seek = as_seconds(params.get("seek") or params.get("start_offset"))
 
     try:
-        info = resolver.extract(url)
+        info = resolver.extract(url, logger=YtdlpLog())
     except Exception as error:  # noqa: BLE001 - any extractor failure is the same to us
-        log("extraction failed: {}".format(error), xbmc.LOGERROR)
+        log("extraction failed: {}: {}".format(type(error).__name__, error), xbmc.LOGERROR)
         return fail(30011)
 
     stream, headers = resolver.pick_hls(info)
@@ -340,8 +381,14 @@ def main():
         item.setProperty("TotalTime", str(duration))
 
     log("playing {} stream, seek={}s".format("adaptive" if adaptive else "progressive", seek))
+    report_to_cast("ok")
     xbmcplugin.setResolvedUrl(HANDLE, True, item)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # Kodi logs the traceback; the cast receiver must still hear it failed.
+        report_to_cast("failed: the plugin crashed, see kodi.log")
+        raise
