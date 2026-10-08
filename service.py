@@ -67,6 +67,13 @@ class Service(xbmc.Monitor):
         super().__init__()
         started = time.monotonic()
         self.switches = kodilog.apply()
+        try:
+            # A copy downloaded by an older version still carries \\N{} escapes,
+            # which crash Kodi 21's Python once decoded (ytdlp_loader docstring).
+            ytdlp_loader.ensure_patched(paths.ytdlp_directory())
+        except Exception as error:  # noqa: BLE001 - the plugin falls back to the bundled copy
+            log("could not patch the downloaded yt-dlp ({}: {})".format(type(error).__name__, error),
+                xbmc.LOGERROR)
         described = ytdlp_loader.describe(paths.ytdlp_directory(), paths.bundled_ytdlp())
         log("service started: {} {}, Kodi {}, Python {}, {}, yt-dlp {} ({})".format(
             ADDON_ID, xbmcaddon.Addon().getAddonInfo("version"), xbmc.getInfoLabel("System.BuildVersion"),

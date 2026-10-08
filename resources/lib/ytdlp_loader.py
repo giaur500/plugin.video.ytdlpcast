@@ -17,17 +17,31 @@ Two properties matter more than freshness:
   directory per path, so replacing a file under the same name inside a running
   process would make later imports read the wrong offsets.
 
+* Every \\N{NAME} escape in yt-dlp's string literals is rewritten to the
+  equivalent \\uXXXX before anything compiles the sources. CPython 3.11, the
+  Python of Kodi 21, decodes \\N{} through a pointer it keeps in a process-wide
+  static (Objects/unicodeobject.c, ucnhash_capi) and fills from the unicodedata
+  module of whichever interpreter decodes one first. Kodi runs every plugin call
+  in its own sub-interpreter and ends it afterwards, freeing that module -- so
+  the next \\N{} anywhere in Kodi jumps through freed memory and Kodi crashes.
+  yt-dlp is imported from source (a ZIP has no .pyc), so YoutubeDL.py's
+  '\\N{FULLWIDTH COMMA}' hit that on every playback after the first. Fixed in
+  CPython 3.12; until Kodi ships it, no \\N{} may ever be decoded here.
+
 No xbmc import here: scripts/test-loader.py exercises all of it on a desktop.
 """
 
 import ast
 import hashlib
+import io
 import json
 import os
 import re
 import sys
 import tempfile
 import time
+import tokenize
+import unicodedata
 import urllib.request
 import zipfile
 
@@ -48,6 +62,10 @@ KEEP = 2  # the current file and the one before it
 
 UP_TO_DATE, UPDATED, SKIPPED, REJECTED, FAILED = (
     "up_to_date", "updated", "skipped", "rejected", "failed")
+
+# Written as the ZIP comment of every archive whose \\N{} escapes were rewritten.
+PATCH_MARK = b"ytdlpcast:named-escapes-1"
+_NAMED_ESCAPE = re.compile(r"\\N\{([^}\\]+)\}")
 
 _MIN_SUPPORTED = re.compile(r"MIN_SUPPORTED\s*,\s*MIN_RECOMMENDED\s*=\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)")
 _VERSION = re.compile(r"""^__version__\s*=\s*['"]([^'"]+)['"]""", re.M)
@@ -121,6 +139,113 @@ def compatible(zip_path, python=None):
 
 
 # ---------------------------------------------------------------------------
+# \\N{} escapes (see the module docstring for why)
+# ---------------------------------------------------------------------------
+
+def neutralize_named_escapes(source):
+    """(source, count): source bytes with every \\N{NAME} in a str literal as \\uXXXX.
+
+    Raw and bytes literals are left alone -- there \\N{} is not an escape. The
+    code point comes from unicodedata.lookup(), which reads the module's own
+    tables and never touches the process-wide pointer.
+    """
+    if b"\\N{" not in source:
+        return source, 0
+    text = source.decode("utf-8")
+    line_starts = [0]
+    for line in text.splitlines(keepends=True):
+        line_starts.append(line_starts[-1] + len(line))
+    edits = []
+    fstring_prefixes = []  # Python 3.12+ splits f-strings into several tokens
+    for token in tokenize.generate_tokens(io.StringIO(text).readline):
+        kind = tokenize.tok_name.get(token.type)
+        if kind == "FSTRING_START":
+            fstring_prefixes.append(re.match(r"[A-Za-z]*", token.string).group(0))
+            continue
+        if kind == "FSTRING_END":
+            fstring_prefixes.pop()
+            continue
+        if kind == "STRING":
+            prefix = re.match(r"[A-Za-z]*", token.string).group(0)
+        elif kind == "FSTRING_MIDDLE" and fstring_prefixes:
+            prefix = fstring_prefixes[-1]
+        else:
+            continue
+        if "r" in prefix.lower() or "b" in prefix.lower():
+            continue
+        start = line_starts[token.start[0] - 1] + token.start[1]
+        end = line_starts[token.end[0] - 1] + token.end[1]
+        segment = text[start:end]
+        for match in _NAMED_ESCAPE.finditer(segment):
+            backslashes = 0
+            while match.start() - backslashes - 1 >= 0 and segment[match.start() - backslashes - 1] == "\\":
+                backslashes += 1
+            if backslashes % 2:
+                continue  # "\\\\N{" -- an escaped backslash, then plain text
+            try:
+                code = ord(unicodedata.lookup(match.group(1)))
+            except KeyError:
+                continue  # not a character name; compiling would fail on it anyway
+            replacement = "\\u{:04x}".format(code) if code <= 0xFFFF else "\\U{:08x}".format(code)
+            edits.append((start + match.start(), start + match.end(), replacement))
+    for begin, finish, replacement in sorted(edits, reverse=True):
+        text = text[:begin] + replacement + text[finish:]
+    return text.encode("utf-8"), len(edits)
+
+
+def patch_archive(source_path, target_path):
+    """Write target_path: the archive with \\N{} rewritten and PATCH_MARK set. Returns the count."""
+    count = 0
+    with zipfile.ZipFile(source_path) as source, \
+            zipfile.ZipFile(target_path, "w", zipfile.ZIP_DEFLATED) as target:
+        for info in source.infolist():
+            data = source.read(info)
+            if info.filename.endswith(".py"):
+                data, changed = neutralize_named_escapes(data)
+                if changed:
+                    log.info("rewrote %d \\N{} escape(s) in %s", changed, info.filename)
+                count += changed
+            target.writestr(info, data, compress_type=zipfile.ZIP_DEFLATED)
+        target.comment = PATCH_MARK
+    return count
+
+
+def is_patched(zip_path):
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            return archive.comment == PATCH_MARK
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
+def ensure_patched(store_dir):
+    """Rewrite the downloaded copy in use if an older add-on version stored it unpatched.
+
+    Run by the service at start. The result gets a new name: zipimport caches
+    an archive's directory per path, so a file is never rewritten in place.
+    """
+    state = _read_state(store_dir) if store_dir and os.path.isdir(store_dir) else {}
+    name = state.get("current")
+    path = os.path.join(store_dir, name) if name else None
+    if not path or not os.path.isfile(path) or is_patched(path):
+        return False
+    patched = name[:-4] + ".p1.zip"
+    fd, tmp = tempfile.mkstemp(dir=store_dir, prefix=".patch-")
+    os.close(fd)
+    try:
+        count = patch_archive(path, tmp)
+        os.replace(tmp, os.path.join(store_dir, patched))
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    state["current"] = patched
+    _write_state(store_dir, state)
+    _cleanup(store_dir, keep_first=patched)
+    log.info("patched %s -> %s (%d \\N{} escape(s))", name, patched, count)
+    return True
+
+
+# ---------------------------------------------------------------------------
 # State on disk
 # ---------------------------------------------------------------------------
 
@@ -160,6 +285,11 @@ def activate(store_dir, bundled_path):
     can fall back to activate_bundled() if the import itself fails.
     """
     path, version = current(store_dir) if store_dir else (None, None)
+    if path and not is_patched(path):
+        # Downloaded by an older add-on version; the service patches it at start.
+        # Until then its \\N{} escapes would be decoded on import -- see the docstring.
+        log.warning("the downloaded yt-dlp %s is not patched yet; using the bundled copy", version)
+        path = None
     if path:
         _prepend(path)
         log.info("using the downloaded %s (%s)", version, path)
@@ -169,6 +299,8 @@ def activate(store_dir, bundled_path):
 
 def activate_bundled(bundled_path):
     version, _ = inspect(bundled_path)
+    if not is_patched(bundled_path):
+        log.error("BUG: the bundled yt-dlp %s was not patched at build time", version)
     _prepend(bundled_path)
     log.info("using the bundled %s (%s)", version, bundled_path)
     return version, "bundled"
@@ -288,7 +420,9 @@ def _update(store_dir, channel, python, timeout):
         _write_state(store_dir, state)
         return Result(SKIPPED, reason="release {} was rejected before".format(sha[:12]))
 
-    fd, tmp = tempfile.mkstemp(dir=store_dir, prefix=".download-")
+    fd, raw = tempfile.mkstemp(dir=store_dir, prefix=".download-")
+    os.close(fd)
+    fd, tmp = tempfile.mkstemp(dir=store_dir, prefix=".patched-")
     os.close(fd)
     try:
         fetched = time.monotonic()
@@ -296,10 +430,12 @@ def _update(store_dir, channel, python, timeout):
         log.info("downloaded %d bytes in %.1f s", len(data), time.monotonic() - fetched)
         if hashlib.sha256(data).hexdigest() != sha:
             return Result(FAILED, reason="download does not match {}".format(SUMS))
-        with open(tmp, "wb") as handle:
+        with open(raw, "wb") as handle:
             handle.write(data)
-        if not zipfile.is_zipfile(tmp):
+        if not zipfile.is_zipfile(raw):
             return _reject(store_dir, state, sha, "not a ZIP archive")
+        # Before anything parses it: validation compiles every source file too.
+        patch_archive(raw, tmp)
         ok, reason = compatible(tmp, python)
         if not ok:
             return _reject(store_dir, state, sha, reason)
@@ -316,8 +452,9 @@ def _update(store_dir, channel, python, timeout):
     except Exception as error:  # noqa: BLE001 - the file in use stays untouched
         return Result(FAILED, reason=str(error))
     finally:
-        if os.path.exists(tmp):
-            os.remove(tmp)
+        for leftover in (raw, tmp):
+            if os.path.exists(leftover):
+                os.remove(leftover)
 
 
 def _reject(store_dir, state, sha, reason):
