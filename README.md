@@ -44,10 +44,9 @@ same box. They are told apart by name: this add-on calls itself `<Kodi's name> (
 it uses its own device identity rather than TubeCast's. Disable one of them; the add-on says so
 once if it finds TubeCast enabled.
 
-**Log.** With *Detailed cast log* on (the default), every step lands in `kodi.log` at INFO
-level, without Kodi's debug mode: discovery, pairing, each command from the phone (`<-`) and
-each report back (`->`). Search the log for `cast/`. Raw protocol traffic is added when Kodi's
-debug logging is on.
+**Log.** Phones connecting and leaving and the screen going online are always logged. Every
+other step — discovery, pairing, each command from the phone (`<-`) and each report back
+(`->`), the raw protocol — has its own switch under *Diagnostics*.
 
 ## How it works
 
@@ -104,6 +103,8 @@ downloads that file, checks it, and puts it on `sys.path`.
   over time (3.9 went in 2025-10). When it drops 3.11, the add-on keeps the last compatible
   version instead of downloading one that cannot run — playback keeps working, it just stops
   getting fresher, and the log says so.
+* **What runs**: *Settings → yt-dlp* shows the version in use (downloaded or the bundled copy,
+  and the channel) and when and how the last check went.
 * **Storage**: `addon_data/plugin.video.ytdlpcast/ytdlp/`, one file per version, never
   overwritten in place (zipimport caches a ZIP's directory per path), current and previous
   kept. The copy shipped in the add-on (stable) is used until the first download succeeds, so
@@ -111,6 +112,36 @@ downloads that file, checks it, and puts it on `sys.path`.
 
 The checksum guards against a corrupted download, not against a compromised release: trust
 ends at the yt-dlp project's GitHub releases, as it did with any repackaged module.
+
+## Diagnostics
+
+Without any switch the add-on writes little to `kodi.log`: warnings, errors, and one summary
+line per playback (`play <id>: yt-dlp <version> (<source>), HLS, manifest rewritten, 2 subtitle
+track(s), seek 0s, ready in 3.0 s`), per update check and per phone connection.
+
+For more, *Settings → Diagnostics* has a switch per area. The tab is shown only at the
+**Expert** settings level, and every switch is off by default. Each writes at INFO level —
+which Kodi 21 logs without its own debug mode — under its own prefix,
+`[plugin.video.ytdlpcast] <area>:`, so one `grep` isolates an area:
+
+| switch | prefix | what it adds |
+|---|---|---|
+| Enable all diagnostics | — | every switch below at once, for a complete log to report a problem with |
+| Resolving the video | `resolve:` | yt-dlp's progress, the time it took, and what YouTube offered: HLS manifest or not, resolutions and codecs, audio tracks, subtitles |
+| yt-dlp verbose mode | `ytdlp:` | yt-dlp's own verbose output: versions, Python, OpenSSL, certifi, JavaScript runtimes, YouTube clients |
+| Manifest rewriting | `manifest:` | variants and audio groups before and after each filter, the fMP4 audio swap, the served URL; keeps the original manifest as `<id>.original.txt` next to the rewritten one |
+| Manifest server requests | `manifest/server:` | every request InputStream Adaptive makes to the loopback server |
+| Subtitle downloads | `subtitles:` | uploaded and automatic tracks, what is downloaded, sizes and times |
+| Kodi player | `player:` | decoder and whether it runs in hardware, pixel format, resolution, audio decoder; quality changes; every stall to buffer with its length (told apart from buffering after a seek); a summary at the end |
+| HTTP requests of the add-on | `http:` | every request the add-on itself makes, with status, size and time, and once the CA bundle in use. Query strings and googlevideo signature segments are left out |
+| yt-dlp updater | `updates:` | which file is used, and each step of a check: checksum, download, validation, clean-up |
+| Cast events | `cast/…:` | discovery answers, pairing, the session, every command and report |
+| Cast: raw protocol traffic | `cast/raw:` | the protocol as received and sent, position reports and keep-alives included |
+| Local network discovery: every packet | `cast/discovery:` | every SSDP packet that arrives and the headers of each DIAL request — "the phone does not see Kodi" |
+| Background service | `service:` | start-up and shutdown timing, settings changes as applied, the update schedule |
+
+The *Kodi player* switch runs a small watcher in the service only while it is on. It follows
+only what this add-on resolved: the plugin marks each item right before handing it to Kodi.
 
 ## Usage
 
@@ -144,8 +175,6 @@ Parameters:
   UDP 1900, DIAL over HTTP on a port the system picks). Off leaves only the TV code.
 * **Link with a TV code** — shows a code for *Settings → Watch on TV → Enter TV code* in the
   app, until a phone links, the dialog is cancelled or five minutes pass.
-* **Detailed cast log** — on by default; see *Log* above. Warnings and errors are logged
-  either way.
 
 ### How the picture and sound settings work
 
@@ -242,6 +271,9 @@ Settings and messages are translated to Polish; English is the source language.
 
 ## Development
 
+Logging goes through one logger per area (`diag.py`, no Kodi needed); `kodilog.py` writes them
+to `kodi.log` and sets each one's level from its Diagnostics switch.
+
 Everything that can be is kept free of `xbmc` imports, so it runs on a desktop without Kodi:
 `resolver.py` (resolution), and on the cast side `cast_protocol.py` (stream parser, queue),
 `cast_lounge.py` (identity, session, long poll), `cast_discovery.py` (SSDP, DIAL) and
@@ -250,7 +282,8 @@ Kodi delivers Player and Monitor callbacks only to the thread that created them,
 controller thread owns the player and every change of cast state; the network threads only
 queue what they receive.
 
-The project's `scripts/` directory has a test for each of these and a harness that runs the
+The project's `scripts/` directory has a test for each of these — the Kodi side runs against
+small stand-ins for Kodi's modules — and a harness that runs the
 receiver on a desktop against YouTube: a phone can cast to it while a fake player prints what
 Kodi would do, or a fake phone links with a TV code and casts a video, so the whole path
 through YouTube is checked without a phone in hand.

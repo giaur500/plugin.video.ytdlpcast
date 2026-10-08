@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Kodi side of casting: the controller thread, the player, logging, the TV code.
+"""Kodi side of casting: the controller thread, the player, the TV code.
 
 The protocol lives in cast_lounge, cast_discovery and cast_receiver, free of
 xbmc; this module wires them to Kodi.
@@ -14,7 +14,6 @@ other callback until the video ended.
 """
 
 import json
-import logging
 import queue
 import threading
 import time
@@ -25,7 +24,7 @@ import xbmc
 import xbmcaddon
 import xbmcgui
 
-from . import cast_discovery, cast_lounge, cast_receiver, paths
+from . import cast_discovery, cast_lounge, cast_receiver, diag, kodilog, paths
 from .cast_protocol import STATUS_PAUSED, STATUS_PLAYING, STATUS_STOPPED
 
 ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
@@ -37,42 +36,7 @@ PROP_ONLINE = ADDON_ID + ".cast.online"
 PROP_REMOTES = ADDON_ID + ".cast.remotes"
 PROP_RESOLVED = ADDON_ID + ".cast.resolved"
 
-log = logging.getLogger("cast.kodi")
-
-_LEVELS = {
-    logging.DEBUG: xbmc.LOGDEBUG,
-    logging.INFO: xbmc.LOGINFO,
-    logging.WARNING: xbmc.LOGWARNING,
-    logging.ERROR: xbmc.LOGERROR,
-    logging.CRITICAL: xbmc.LOGFATAL,
-}
-
-
-class KodiLogHandler(logging.Handler):
-    """'[plugin.video.ytdlpcast] cast/lounge: …' -- grep 'cast/' shows it all."""
-
-    def emit(self, record):
-        try:
-            message = self.format(record)
-        except Exception:  # noqa: BLE001 - a bad log call must not break casting
-            message = str(record.msg)
-        xbmc.log("[{}] {}: {}".format(ADDON_ID, record.name.replace(".", "/"), message),
-                 _LEVELS.get(record.levelno, xbmc.LOGINFO))
-
-
-def setup_logging(verbose):
-    """Every step at INFO when verbose -- Kodi 21 writes INFO without debug mode.
-
-    Warnings and errors always; raw protocol traffic only with Kodi's debug log.
-    """
-    root = logging.getLogger("cast")
-    if not any(isinstance(handler, KodiLogHandler) for handler in root.handlers):
-        root.addHandler(KodiLogHandler())
-    root.propagate = False
-    if xbmc.getCondVisibility("System.GetBool(debug.showloginfo)"):
-        root.setLevel(logging.DEBUG)
-    else:
-        root.setLevel(logging.INFO if verbose else logging.WARNING)
+log = diag.logger("cast.kodi")
 
 
 def read_settings():
@@ -81,7 +45,6 @@ def read_settings():
         "enabled": addon.getSettingBool("cast_enabled"),
         "discovery": addon.getSettingBool("cast_discovery"),
         "name": addon.getSettingString("cast_name").strip(),
-        "verbose": addon.getSettingBool("cast_verbose_log"),
     }
 
 
@@ -282,8 +245,8 @@ class CastController(threading.Thread):
         if self.settings["discovery"]:
             dial, ssdp = self._start_discovery(receiver, identity)
         worker.start()
-        log.info("casting on as \"%s\", device %s, local discovery %s", name, identity.device_id,
-                 "on" if dial else "off")
+        log.log(diag.NOTICE, "casting on as \"%s\", local discovery %s", name, "on" if dial else "off")
+        log.info("device %s", identity.device_id)
         try:
             while not self._stopping.is_set():
                 busy = receiver.remotes or receiver.active or receiver.pending
@@ -298,7 +261,7 @@ class CastController(threading.Thread):
             if dial:
                 dial.stop()
             worker.join(5)
-            log.info("casting off")
+            log.log(diag.NOTICE, "casting off")
 
     def _start_discovery(self, receiver, identity):
         dial = cast_discovery.DialServer(receiver)
@@ -340,7 +303,7 @@ class CastController(threading.Thread):
                 HOME.setProperty(PROP_REMOTES, str(len(receiver.remotes)))
             elif kind == "online":
                 HOME.setProperty(PROP_ONLINE, "1" if event[1] else "")
-                log.info("screen %s", "online" if event[1] else "offline")
+                log.log(diag.NOTICE, "screen %s", "online at YouTube" if event[1] else "offline")
             elif kind == "started":
                 receiver.on_started(playback.resolution(consume=True) == "ok")
             elif kind == "paused":
@@ -361,9 +324,8 @@ class CastController(threading.Thread):
 
 def start(settings):
     """Start casting per the settings; return the controller, or None when off."""
-    setup_logging(settings["verbose"])
     if not settings["enabled"]:
-        log.info("casting is switched off in the settings")
+        log.log(diag.NOTICE, "casting is switched off in the settings")
         return None
     controller = CastController(settings)
     controller.start()
@@ -383,7 +345,7 @@ def pair_with_tv_code():
     service keeps and the window properties it publishes.
     """
     settings = read_settings()
-    setup_logging(settings["verbose"])
+    kodilog.apply()
     if not settings["enabled"]:
         return notify(string(30193), xbmcgui.NOTIFICATION_WARNING)
     if HOME.getProperty(PROP_ONLINE) != "1":

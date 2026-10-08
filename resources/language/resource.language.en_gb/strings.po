@@ -255,13 +255,6 @@ msgctxt "#30188"
 msgid "Shows a code to type into the YouTube app (Settings → Watch on TV → Enter TV code). Works when the phone is on another network, or when the local search does not find Kodi. A linked phone stays linked across restarts."
 msgstr ""
 
-msgctxt "#30189"
-msgid "Detailed cast log"
-msgstr ""
-
-msgctxt "#30190"
-msgid "Writes every step of casting to kodi.log, without Kodi's debug mode: discovery, pairing, each command from the phone and each answer to it. Search the log for \"cast/\". Warnings and errors are logged either way."
-msgstr ""
 
 msgctxt "#30191"
 msgid "{} connected"
@@ -293,4 +286,144 @@ msgstr ""
 
 msgctxt "#30198"
 msgid "TubeCast is enabled as well, so the phone lists two receivers for this box. Disable one of them."
+msgstr ""
+
+msgctxt "#30169"
+msgid "the downloaded one does not work"
+msgstr ""
+
+msgctxt "#30175"
+msgid "Version in use"
+msgstr ""
+
+msgctxt "#30176"
+msgid "Last check"
+msgstr ""
+
+msgctxt "#30177"
+msgid "downloaded"
+msgstr ""
+
+msgctxt "#30178"
+msgid "bundled copy"
+msgstr ""
+
+msgctxt "#30179"
+msgid "not checked yet"
+msgstr ""
+
+msgctxt "#30200"
+msgid "Diagnostics"
+msgstr ""
+
+msgctxt "#30201"
+msgid "Enable all diagnostics"
+msgstr ""
+
+msgctxt "#30202"
+msgid "Turns on every switch below at once — for a complete log to report a problem with. Each switch writes to kodi.log at INFO level, so Kodi's own debug logging is not needed. Without any switch the add-on logs only warnings, errors and one summary line per playback, update check and phone connection."
+msgstr ""
+
+msgctxt "#30204"
+msgid "Resolving the video"
+msgstr ""
+
+msgctxt "#30205"
+msgid "yt-dlp's progress while it resolves a video, how long it took, and what YouTube offered: whether there is an HLS manifest, resolutions and codecs, audio tracks, subtitles. Shows at which step resolving fails and why a quality is missing."
+msgstr ""
+
+msgctxt "#30206"
+msgid "yt-dlp verbose mode"
+msgstr ""
+
+msgctxt "#30207"
+msgid "yt-dlp's own verbose output: its version, Python, OpenSSL and certifi, JavaScript runtimes, the YouTube clients it tries. Long — for problems inside yt-dlp itself."
+msgstr ""
+
+msgctxt "#30208"
+msgid "Manifest rewriting"
+msgstr ""
+
+msgctxt "#30209"
+msgid "The variants and audio groups before and after each filter (resolution, codec, quality), the fMP4 audio that replaces YouTube's, and where the rewritten manifest is served. Keeps a copy of the original manifest next to the rewritten one in Kodi's temp folder."
+msgstr ""
+
+msgctxt "#30210"
+msgid "Manifest server requests"
+msgstr ""
+
+msgctxt "#30211"
+msgid "Every request InputStream Adaptive makes to the add-on's local manifest server, with its status and size — whether the rewritten playlists were actually fetched."
+msgstr ""
+
+msgctxt "#30212"
+msgid "Subtitle downloads"
+msgstr ""
+
+msgctxt "#30213"
+msgid "Which subtitle tracks the author uploaded, which are downloaded, and each file's size and download time."
+msgstr ""
+
+msgctxt "#30214"
+msgid "Kodi player: decoder, quality, buffering"
+msgstr ""
+
+msgctxt "#30215"
+msgid "Watches Kodi's player while it plays what the add-on resolved: the video and audio decoder and whether decoding runs in hardware, quality changes made by InputStream Adaptive, every stall to buffer with its length, and a summary at the end."
+msgstr ""
+
+msgctxt "#30216"
+msgid "Network and updates"
+msgstr ""
+
+msgctxt "#30217"
+msgid "HTTP requests of the add-on"
+msgstr ""
+
+msgctxt "#30218"
+msgid "Every request the add-on itself makes — manifest, audio index, subtitles, yt-dlp updates, the cast session — with status, size and time, and once the certificates it verifies against. Query strings and signatures are left out. yt-dlp's own requests are in its verbose mode."
+msgstr ""
+
+msgctxt "#30219"
+msgid "yt-dlp updater"
+msgstr ""
+
+msgctxt "#30220"
+msgid "Each step of a yt-dlp update check: the published checksum, the download, the validation against Kodi's Python and the clean-up of older copies."
+msgstr ""
+
+msgctxt "#30221"
+msgid "Cast events"
+msgstr ""
+
+msgctxt "#30222"
+msgid "Every step of casting: discovery answers, pairing, the YouTube session, each command from the phone (<-) and each answer to it (->)."
+msgstr ""
+
+msgctxt "#30223"
+msgid "Cast: raw protocol traffic"
+msgstr ""
+
+msgctxt "#30224"
+msgid "The cast protocol as received and sent, including the frequent position reports and keep-alives. Very long; for when YouTube changes something in the protocol."
+msgstr ""
+
+msgctxt "#30225"
+msgid "Local network discovery: every packet"
+msgstr ""
+
+msgctxt "#30226"
+msgid "Every SSDP packet that reaches Kodi, not only the YouTube app's searches, and the headers of each DIAL request. For \"the phone does not see Kodi\": it shows whether the phone's searches arrive at all."
+msgstr ""
+
+msgctxt "#30227"
+msgid "Service"
+msgstr ""
+
+msgctxt "#30228"
+msgid "Background service"
+msgstr ""
+
+msgctxt "#30229"
+msgid "The add-on's service: start-up and shutdown with their timing, the manifest server, settings changes as they are applied, and the update schedule."
 msgstr ""

@@ -15,7 +15,6 @@ actually closed on shutdown.
 No xbmc import: scripts/test-cast-discovery.py exercises both servers.
 """
 
-import logging
 import socket
 import struct
 import threading
@@ -24,8 +23,12 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from xml.sax.saxutils import escape
 
-ssdp_log = logging.getLogger("cast.ssdp")
-dial_log = logging.getLogger("cast.dial")
+from . import diag
+
+ssdp_log = diag.logger("cast.ssdp")
+dial_log = diag.logger("cast.dial")
+# Every datagram and every header: for "the phone does not see Kodi".
+detail = diag.logger("cast.discovery")
 
 SSDP_ADDRESS = "239.255.255.250"
 SSDP_PORT = 1900
@@ -151,7 +154,12 @@ class SsdpResponder:
                 ssdp_log.exception("answering %s failed", peer[0])
 
     def _handle(self, datagram, peer):
-        ssdp_log.debug("datagram from %s: %r", peer, datagram)
+        if diag.enabled("cast.discovery"):
+            lines = datagram.decode("utf-8", "replace").splitlines()
+            target = next((line for line in lines if line.upper().startswith("ST:")), "no ST")
+            agent = next((line for line in lines if line.upper().startswith(("USER-AGENT:", "SERVER:"))), "")
+            detail.info("datagram from %s:%d: %s | %s %s", peer[0], peer[1], lines[0] if lines else "?",
+                        target, agent)
         if not datagram.startswith(b"M-SEARCH") or DIAL_SERVICE.encode() not in datagram:
             return
         ip = local_address_for(peer)
@@ -181,9 +189,15 @@ class _DialHandler(BaseHTTPRequestHandler):
     server_version = "plugin.video.ytdlpcast"
     protocol_version = "HTTP/1.1"
 
+    def _detail(self):
+        if diag.enabled("cast.discovery"):
+            detail.info("%s %s %s headers: %s", self.client_address[0], self.command, self.path,
+                        dict(self.headers.items()))
+
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         dial_log.info("%s GET %s", self.client_address[0], path)
+        self._detail()
         if path == DESCRIPTION_PATH:
             host = self.headers.get("Host") or "{}:{}".format(*self.server.server_address)
             body = DEVICE_DESCRIPTION.format(base=escape("http://" + host), name=escape(self.server.app.name),
@@ -200,6 +214,7 @@ class _DialHandler(BaseHTTPRequestHandler):
         form = dict(urllib.parse.parse_qsl(body))
         dial_log.info("%s POST %s %s", self.client_address[0], path,
                       {k: v for k, v in form.items() if k != "pairingCode"})
+        self._detail()
         if path != APP_PATH:
             return self._respond(404, "not found", content_type="text/plain")
         if not self.server.app.launch(form):
@@ -210,6 +225,7 @@ class _DialHandler(BaseHTTPRequestHandler):
     def do_DELETE(self):
         path = self.path.split("?", 1)[0]
         dial_log.info("%s DELETE %s", self.client_address[0], path)
+        self._detail()
         if path != RUN_PATH:
             return self._respond(404, "not found", content_type="text/plain")
         self.server.app.stop()

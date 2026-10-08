@@ -39,14 +39,6 @@
                         <close>true</close>
                     </control>
                 </setting>
-                <setting id="cast_verbose_log" type="boolean" label="30189" help="30190">
-                    <level>1</level>
-                    <default>true</default>
-                    <dependencies>
-                        <dependency type="enable" setting="cast_enabled">true</dependency>
-                    </dependencies>
-                    <control type="toggle"/>
-                </setting>
             </group>
         </category>
         <category id="picture_sound" label="30110">
@@ -138,6 +130,28 @@
         </category>
         <category id="ytdlp" label="30160">
             <group id="1" label="30160">
+                <setting id="ytdlp_info_version" type="string" label="30175">
+                    <level>0</level>
+                    <default></default>
+                    <enable>false</enable>
+                    <constraints>
+                        <allowempty>true</allowempty>
+                    </constraints>
+                    <control type="edit" format="string">
+                        <heading>30175</heading>
+                    </control>
+                </setting>
+                <setting id="ytdlp_info_check" type="string" label="30176">
+                    <level>0</level>
+                    <default></default>
+                    <enable>false</enable>
+                    <constraints>
+                        <allowempty>true</allowempty>
+                    </constraints>
+                    <control type="edit" format="string">
+                        <heading>30176</heading>
+                    </control>
+                </setting>
                 <setting id="ytdlp_channel" type="integer" label="30161" help="30162">
                     <level>0</level>
                     <default>0</default>
@@ -187,6 +201,119 @@
                     <control type="edit" format="integer">
                         <heading>30156</heading>
                     </control>
+                </setting>
+            </group>
+        </category>
+        <category id="diagnostics" label="30200">
+            <group id="1" label="30200">
+                <setting id="diag_all" type="boolean" label="30201" help="30202">
+                    <level>3</level>
+                    <default>false</default>
+                    <control type="toggle"/>
+                </setting>
+            </group>
+            <group id="2" label="30100">
+                <setting id="diag_resolve" type="boolean" label="30204" help="30205">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="diag_ytdlp_verbose" type="boolean" label="30206" help="30207">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="diag_manifest" type="boolean" label="30208" help="30209">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="diag_manifest_server" type="boolean" label="30210" help="30211">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="diag_subtitles" type="boolean" label="30212" help="30213">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="diag_player" type="boolean" label="30214" help="30215">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+            </group>
+            <group id="3" label="30216">
+                <setting id="diag_http" type="boolean" label="30217" help="30218">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="diag_updates" type="boolean" label="30219" help="30220">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+            </group>
+            <group id="4" label="30180">
+                <setting id="diag_cast" type="boolean" label="30221" help="30222">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="diag_cast_traffic" type="boolean" label="30223" help="30224">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+                <setting id="diag_discovery" type="boolean" label="30225" help="30226">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
+            </group>
+            <group id="5" label="30227">
+                <setting id="diag_service" type="boolean" label="30228" help="30229">
+                    <level>3</level>
+                    <default>false</default>
+                    <dependencies>
+                        <dependency type="enable" setting="diag_all">false</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
                 </setting>
             </group>
         </category>

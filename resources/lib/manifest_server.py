@@ -15,6 +15,10 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from . import diag
+
+log = diag.logger("manifest.server")
+
 MANIFEST_MIME = "application/vnd.apple.mpegurl"
 MANIFEST_EXTENSION = ".m3u8"
 HEALTH_PATH = "/health"
@@ -66,7 +70,10 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def log_message(self, format, *args):  # noqa: A002 - signature fixed by the base class
-        pass  # Kodi has its own log; the default would write to stderr.
+        # Never to stderr (the default); to Kodi's log when its switch is on --
+        # it shows whether InputStream Adaptive fetched the rewritten playlists.
+        if diag.enabled("manifest.server"):
+            log.info("%s %s", self.address_string(), format % args)
 
 
 class ManifestServer:

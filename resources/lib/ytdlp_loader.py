@@ -31,6 +31,10 @@ import time
 import urllib.request
 import zipfile
 
+from . import diag
+
+log = diag.logger("updates")
+
 CHANNELS = {
     "nightly": "yt-dlp/yt-dlp-nightly-builds",
     "stable": "yt-dlp/yt-dlp",
@@ -98,6 +102,8 @@ def compatible(zip_path, python=None):
         return False, "not a yt-dlp archive ({})".format(error)
     if minimum > python:
         return False, "needs Python {}.{}, this is {}.{}".format(*minimum, *python)
+    started = time.monotonic()
+    parsed = 0
     with zipfile.ZipFile(zip_path) as archive:
         for name in archive.namelist():
             if not name.endswith(".py"):
@@ -107,6 +113,10 @@ def compatible(zip_path, python=None):
             except SyntaxError as error:
                 return False, "{} does not parse on Python {}.{} (line {})".format(
                     name, python[0], python[1], error.lineno)
+            parsed += 1
+    log.info("validated %s: needs Python %d.%d (have %d.%d), %d source files parse, %.1f s",
+             os.path.basename(zip_path), minimum[0], minimum[1], python[0], python[1], parsed,
+             time.monotonic() - started)
     return True, None
 
 
@@ -152,6 +162,7 @@ def activate(store_dir, bundled_path):
     path, version = current(store_dir) if store_dir else (None, None)
     if path:
         _prepend(path)
+        log.info("using the downloaded %s (%s)", version, path)
         return version, "downloaded"
     return activate_bundled(bundled_path)
 
@@ -159,7 +170,42 @@ def activate(store_dir, bundled_path):
 def activate_bundled(bundled_path):
     version, _ = inspect(bundled_path)
     _prepend(bundled_path)
+    log.info("using the bundled %s (%s)", version, bundled_path)
     return version, "bundled"
+
+
+def mark_broken(store_dir, broken):
+    """Remember that the downloaded file does not import, for describe(); False clears it."""
+    state = _read_state(store_dir)
+    name = state.get("current") if broken else None
+    if state.get("broken") != name:
+        state["broken"] = name
+        _write_state(store_dir, state)
+
+
+def describe(store_dir, bundled_path):
+    """What the add-on runs and how the last check went, for the settings screen.
+
+    {"version", "source": downloaded|bundled|fallback, "channel", "updated_at",
+     "checked_at", "last": {"status", "version", "reason", "at"} or None}
+    """
+    state = _read_state(store_dir) if store_dir and os.path.isdir(store_dir) else {}
+    path, version = current(store_dir) if store_dir else (None, None)
+    info = {"channel": state.get("channel"), "updated_at": state.get("updated_at"),
+            "checked_at": state.get("checked_at"), "last": state.get("last_result")}
+    if path and state.get("broken") != state.get("current"):
+        # States from before 2.1 have no updated_at; the file's age says the same.
+        info.update(version=version, source="downloaded",
+                    updated_at=info["updated_at"] or int(os.path.getmtime(path)))
+        return info
+    try:
+        bundled, _ = inspect(bundled_path)
+    except (OSError, KeyError, ValueError, zipfile.BadZipFile):
+        bundled = None
+    # The bundled copy, either because nothing was downloaded yet or because
+    # the download does not import; it is always built from the stable channel.
+    info.update(version=bundled, source="fallback" if path else "bundled", channel="stable")
+    return info
 
 
 def _prepend(path):
@@ -178,8 +224,15 @@ def _url(channel, asset):
 
 def _fetch(url, timeout):
     request = urllib.request.Request(url, headers={"User-Agent": "plugin.video.ytdlpcast"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read()
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = response.read()
+            diag.log_request("GET", url, started, response.status, len(data))
+            return data
+    except Exception as error:
+        diag.log_request("GET", url, started, error=error)
+        raise
 
 
 def published_sha256(channel, timeout=20):
@@ -192,7 +245,27 @@ def published_sha256(channel, timeout=20):
 
 
 def update(store_dir, channel, python=None, timeout=60):
-    """Bring store_dir up to date with the channel. Never removes the file in use."""
+    """Bring store_dir up to date with the channel. Never removes the file in use.
+
+    Whatever the outcome, it is kept in the state as last_result -- the
+    settings screen shows it.
+    """
+    started = time.monotonic()
+    log.info("checking %s: %s", channel, _url(channel, ASSET) if channel in CHANNELS else "?")
+    result = _update(store_dir, channel, python, timeout)
+    if os.path.isdir(store_dir):
+        state = _read_state(store_dir)
+        state["last_result"] = {"status": result.status, "version": result.version,
+                                "reason": result.reason, "at": int(time.time())}
+        if result.status == UPDATED:
+            state["updated_at"] = state["last_result"]["at"]
+            state["broken"] = None
+        _write_state(store_dir, state)
+    log.info("check finished in %.1f s: %s", time.monotonic() - started, result)
+    return result
+
+
+def _update(store_dir, channel, python, timeout):
     if channel not in CHANNELS:
         return Result(FAILED, reason="unknown channel {!r}".format(channel))
     os.makedirs(store_dir, exist_ok=True)
@@ -206,6 +279,8 @@ def update(store_dir, channel, python=None, timeout=60):
         return Result(FAILED, reason="checksums unavailable: {}".format(error))
 
     in_use, _ = current(store_dir)
+    log.info("published SHA-256 %s; in use: %s, SHA-256 %s", sha[:16],
+             os.path.basename(in_use) if in_use else "the bundled copy", (state.get("sha256") or "-")[:16])
     if in_use and state.get("sha256") == sha:
         _write_state(store_dir, state)
         return Result(UP_TO_DATE, version=state.get("version"))
@@ -216,7 +291,9 @@ def update(store_dir, channel, python=None, timeout=60):
     fd, tmp = tempfile.mkstemp(dir=store_dir, prefix=".download-")
     os.close(fd)
     try:
+        fetched = time.monotonic()
         data = _fetch(_url(channel, ASSET), timeout)
+        log.info("downloaded %d bytes in %.1f s", len(data), time.monotonic() - fetched)
         if hashlib.sha256(data).hexdigest() != sha:
             return Result(FAILED, reason="download does not match {}".format(SUMS))
         with open(tmp, "wb") as handle:
@@ -233,6 +310,7 @@ def update(store_dir, channel, python=None, timeout=60):
             os.replace(tmp, target)
         state.update(current=name, version=version, channel=channel, sha256=sha)
         _write_state(store_dir, state)
+        log.info("installed as %s", name)
         _cleanup(store_dir, keep_first=name)
         return Result(UPDATED, version=version)
     except Exception as error:  # noqa: BLE001 - the file in use stays untouched
@@ -261,5 +339,6 @@ def _cleanup(store_dir, keep_first):
         if name not in keep:
             try:
                 os.remove(os.path.join(store_dir, name))
+                log.info("removed the older %s", name)
             except OSError:
                 pass

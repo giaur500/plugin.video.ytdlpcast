@@ -13,15 +13,15 @@ seek(seconds), status() -> (state, position, duration), volume() ->
 """
 
 import http.client
-import logging
 import random
 import string
 import time
 
-from . import cast_lounge, cast_protocol
+from . import cast_lounge, cast_protocol, diag
 from .cast_protocol import STATUS_LOADING, STATUS_PAUSED, STATUS_PLAYING, STATUS_STOPPED, short
 
-log = logging.getLogger("cast.receiver")
+log = diag.logger("cast.receiver")
+raw = diag.logger("cast.raw")
 
 # Sent every few seconds or so; logging each one would bury everything else.
 QUIET_COMMANDS = ("noop",)
@@ -82,7 +82,7 @@ class CastReceiver:
     def handle(self, commands):
         for command in commands:
             if command.name in QUIET_COMMANDS:
-                log.debug("<- %s", command.name)
+                raw.info("<- %s", command.name)
             else:
                 log.info("<- %s %s", command.name, short(command.data) if command.data is not None else "")
             handler = getattr(self, "_on_" + command.name, None)
@@ -104,6 +104,7 @@ class CastReceiver:
     def _on_remoteConnected(self, data):
         remote_id, name = data.get("id"), data.get("name") or "?"
         self.remotes[remote_id] = name
+        log.log(diag.NOTICE, "phone connected: %s", name)
         self.player.notify(name, "connected")
         # Kodi plays the phone's queue; YouTube's own autoplay would fight it.
         self._send("onAutoplayModeChanged", {"autoplayMode": "DISABLED"})
@@ -113,6 +114,7 @@ class CastReceiver:
     def _on_remoteDisconnected(self, data):
         remote_id, name = data.get("id"), data.get("name") or "?"
         self.remotes.pop(remote_id, None)
+        log.log(diag.NOTICE, "phone disconnected: %s", name)
         self.player.notify(name, "disconnected")
 
     def _on_getNowPlaying(self, data):
@@ -265,8 +267,8 @@ class CastReceiver:
         position = current_position if position is None else position
         duration = current_duration if duration is None else duration
         self.last_report = time.monotonic()
-        # A change of state is worth a log line; the same state again every
-        # five seconds (the position ticking on) only in Kodi's debug log.
+        # A change of state is a cast event; the same state again every five
+        # seconds (the position ticking on) belongs to the raw traffic.
         quiet = state == self.last_state
         self.last_state = state
         self._send("onStateChange", _timing(state, position, duration, self.cpn), quiet=quiet)
@@ -290,7 +292,7 @@ class CastReceiver:
             "hasNext": "true" if self.state.has_next else "false"})
 
     def _send(self, sc, payload, quiet=False):
-        (log.debug if quiet else log.info)("-> %s %s", sc, short(payload))
+        (raw if quiet else log).info("-> %s %s", sc, short(payload))
         try:
             self.session.send(sc, payload)
         except (cast_lounge.LoungeError, OSError, http.client.HTTPException) as error:

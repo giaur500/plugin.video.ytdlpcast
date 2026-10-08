@@ -16,12 +16,16 @@ ListItem to Kodi, so it cannot host anything long-lived. This service does:
 
 import glob
 import os
+import platform
+import sys
+import threading
 import time
 
 import xbmc
 import xbmcaddon
 
-from resources.lib import cast_kodi, manifest_server, paths, ytdlp_loader
+from resources.lib import (cast_kodi, diag, kodilog, manifest_server, paths, playback_diag, ytdlp_info,
+                           ytdlp_loader)
 
 ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
 
@@ -29,8 +33,11 @@ ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
 FIRST_CHECK_DELAY = 60
 CHECK_INTERVAL = 24 * 60 * 60
 
+service_log = diag.logger("service")
+
 
 def log(message, level=xbmc.LOGINFO):
+    """The lines logged whatever the Diagnostics switches say: summaries, warnings, errors."""
     xbmc.log("[{}] {}".format(ADDON_ID, message), level)
 
 
@@ -47,28 +54,54 @@ def start_server(root, port):
         log("manifest server could not bind 127.0.0.1:{} ({}); manifests will play as published"
             .format(port, error), xbmc.LOGERROR)
         return None
-    log("manifest server listening on {}".format(server.base_url))
+    service_log.info("manifest server listening on %s", server.base_url)
     return server
+
+
+def player_diagnostics_wanted(switches):
+    return bool(switches.get(diag.ALL) or switches.get("diag_player"))
 
 
 class Service(xbmc.Monitor):
     def __init__(self):
         super().__init__()
+        started = time.monotonic()
+        self.switches = kodilog.apply()
+        described = ytdlp_loader.describe(paths.ytdlp_directory(), paths.bundled_ytdlp())
+        log("service started: {} {}, Kodi {}, Python {}, {}, yt-dlp {} ({})".format(
+            ADDON_ID, xbmcaddon.Addon().getAddonInfo("version"), xbmc.getInfoLabel("System.BuildVersion"),
+            platform.python_version(), sys.platform, described.get("version"), described.get("source")))
+        ytdlp_info.refresh()
         self.root = paths.manifest_directory()
-        # Rewritten manifests and downloaded subtitles are per-playback scratch;
-        # anything left from a previous run is stale.
-        for pattern in ("*.m3u8", "*.srt"):
+        # Rewritten manifests, kept originals and downloaded subtitles are
+        # per-playback scratch; anything left from a previous run is stale.
+        removed = 0
+        for pattern in ("*.m3u8", "*.srt", "*.original.txt"):
             for stale in glob.glob(os.path.join(self.root, pattern)):
                 try:
                     os.remove(stale)
+                    removed += 1
                 except OSError:
                     pass
+        service_log.info("removed %d stale file(s) from %s", removed, self.root)
         self.port = configured_port()
         self.server = start_server(self.root, self.port)
         self.cast_settings = cast_kodi.read_settings()
         self.cast = cast_kodi.start(self.cast_settings)
+        self.player_diag = playback_diag.start(player_diagnostics_wanted(self.switches))
+        service_log.info("started in %.1f s; first yt-dlp check in %d s", time.monotonic() - started,
+                         FIRST_CHECK_DELAY)
 
     def onSettingsChanged(self):
+        switches = kodilog.apply()
+        if switches != self.switches:
+            service_log.info("diagnostics now: %s",
+                             ", ".join(name for name, on in sorted(switches.items()) if on) or "all off")
+            if player_diagnostics_wanted(switches) != player_diagnostics_wanted(self.switches):
+                playback_diag.stop(self.player_diag)
+                self.player_diag = playback_diag.start(player_diagnostics_wanted(switches))
+            self.switches = switches
+
         port = configured_port()
         if port != self.port:
             log("manifest server port changed {} -> {}, restarting".format(self.port, port))
@@ -78,20 +111,16 @@ class Service(xbmc.Monitor):
             self.server = start_server(self.root, port)
 
         settings = cast_kodi.read_settings()
-        if settings == self.cast_settings:
-            return
-        restart = any(settings[key] != self.cast_settings[key] for key in ("enabled", "discovery", "name"))
-        self.cast_settings = settings
-        if restart:
+        if settings != self.cast_settings:
             log("cast settings changed, restarting the receiver")
+            self.cast_settings = settings
             cast_kodi.stop(self.cast)
             self.cast = cast_kodi.start(settings)
-        else:
-            cast_kodi.setup_logging(settings["verbose"])
 
     def check_ytdlp(self):
         addon = xbmcaddon.Addon()  # fresh: settings may have changed since start
         if not addon.getSettingBool("ytdlp_auto_update"):
+            service_log.info("automatic yt-dlp updates are switched off")
             return
         channel = ytdlp_loader.SETTING_CHANNELS[addon.getSettingInt("ytdlp_channel")]
         started = time.time()
@@ -100,6 +129,8 @@ class Service(xbmc.Monitor):
         except Exception as error:  # noqa: BLE001 - the service must outlive any update
             log("yt-dlp update crashed ({}: {})".format(type(error).__name__, error), xbmc.LOGERROR)
             return
+        finally:
+            ytdlp_info.refresh()
         took = time.time() - started
         if result.status == ytdlp_loader.REJECTED:
             # Typically a release that needs a newer Python than Kodi ships.
@@ -115,10 +146,16 @@ class Service(xbmc.Monitor):
         while not self.waitForAbort(wait):
             self.check_ytdlp()
             wait = CHECK_INTERVAL
+            service_log.info("next yt-dlp check in %d h", CHECK_INTERVAL // 3600)
+        stopping = time.monotonic()
         cast_kodi.stop(self.cast)
+        playback_diag.stop(self.player_diag)
         if self.server:
             self.server.stop()
-            log("manifest server stopped")
+            service_log.info("manifest server stopped")
+        service_log.info("stopped in %.1f s; threads still alive: %s", time.monotonic() - stopping,
+                         ", ".join(t.name for t in threading.enumerate() if t is not threading.current_thread())
+                         or "none")
 
 
 if __name__ == "__main__":

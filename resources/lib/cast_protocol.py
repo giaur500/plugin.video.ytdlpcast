@@ -6,10 +6,11 @@ xbmc import, so scripts/test-cast-protocol.py exercises it on a desktop.
 """
 
 import json
-import logging
 from collections import namedtuple
 
-log = logging.getLogger("cast.lounge")
+from . import diag
+
+log = diag.logger("cast.lounge")
 
 Command = namedtuple("Command", ("code", "name", "data"))
 

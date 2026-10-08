@@ -6,12 +6,14 @@ desktop with scripts/test-resolver.py, without a running Kodi.
 """
 
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
+from . import diag, mp4index
 
-from . import mp4index
+manifest_log = diag.logger("manifest")
 
 HLS_MIME = "application/vnd.apple.mpegurl"
 
@@ -24,11 +26,12 @@ def watch_url(video_id):
     return "https://www.youtube.com/watch?v={}".format(video_id)
 
 
-def extract(url, logger=None):
+def extract(url, logger=None, verbose=False):
     """yt-dlp's info dict for url.
 
     logger, when given, receives yt-dlp's messages (debug/warning/error, as
     yt-dlp's logger interface defines them); without one it stays silent.
+    verbose turns on yt-dlp's own verbose mode: versions, clients, requests.
     """
     # Imported here, not at module level: the plugin first puts the right yt-dlp
     # on sys.path (ytdlp_loader.activate), and only then may it be imported.
@@ -42,6 +45,8 @@ def extract(url, logger=None):
     }
     if logger is not None:
         options["logger"] = logger
+    if verbose:
+        options["verbose"] = True
     with YoutubeDL(options) as ydl:
         return ydl.sanitize_info(ydl.extract_info(url, download=False))
 
@@ -108,10 +113,54 @@ _AUDIO_TAG = {AUDIO_AAC_LC: "mp4a.40.2", AUDIO_HE_AAC: "mp4a.40.5"}
 _ATTRIBUTE = re.compile(r'([A-Z0-9-]+)=("[^"]*"|[^,]*)')
 
 
+def fetch(url, headers=None, timeout=20, method="GET"):
+    """Bytes at url, with the request in the HTTP diagnostics either way."""
+    request = urllib.request.Request(url, headers=dict(headers or {}), method=method)
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = response.read()
+            diag.log_request(method, url, started, response.status, len(data))
+            return data
+    except Exception as error:
+        diag.log_request(method, url, started, error=error)
+        raise
+
+
 def fetch_manifest(url, headers, timeout=20):
-    request = urllib.request.Request(url, headers=dict(headers or {}))
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read().decode("utf-8", "replace")
+    return fetch(url, headers, timeout).decode("utf-8", "replace")
+
+
+def describe_formats(info):
+    """yt-dlp's result in one line: what YouTube offered for this video."""
+    formats = info.get("formats") or ()
+    video = [f for f in formats if (f.get("vcodec") or "none") != "none"]
+    audio = [f for f in formats if (f.get("vcodec") or "none") == "none" and (f.get("acodec") or "none") != "none"]
+    heights = sorted({f.get("height") for f in video if f.get("height")})
+    codecs = sorted({(f.get("vcodec") or "").split(".")[0] for f in video})
+    hls = any(f.get("protocol") == "m3u8_native" and f.get("manifest_url") for f in formats)
+    audio_ids = sorted({"{}{}".format(f.get("format_id"), "/" + f["language"] if f.get("language") else "")
+                        for f in audio if (f.get("format_id") or "").split("-")[0] in ("139", "140", "251", "250")})
+    return ("{} formats, HLS manifest {}, video {}–{}p in {}, audio {}, subtitles {}, automatic captions {}, "
+            "duration {}s, live {}").format(
+        len(formats), "yes" if hls else "NO", heights[0] if heights else "?", heights[-1] if heights else "?",
+        "/".join(c for c in codecs if c) or "?", ", ".join(audio_ids) or "?",
+        ",".join(sorted(info.get("subtitles") or {})) or "none", len(info.get("automatic_captions") or {}),
+        info.get("duration"), info.get("is_live"))
+
+
+def describe_variants(text):
+    """A master playlist in one line: variants by height and codec, audio groups."""
+    entries = _parse(text)
+    variants = [e for e in entries if e["kind"] == "variant"]
+    groups = sorted({e["attrs"].get("GROUP-ID") for e in entries if _is_audio(e)})
+    by_codec = {}
+    for entry in variants:
+        video, _ = _codecs(entry["attrs"])
+        by_codec.setdefault(video.split(".")[0] or "?", []).append(_height(entry["attrs"]))
+    detail = "; ".join("{} {}".format(codec, ",".join("{}p".format(h) for h in sorted(heights)))
+                       for codec, heights in sorted(by_codec.items()))
+    return "{} variants ({}), audio groups: {}".format(len(variants), detail or "-", ", ".join(groups) or "none")
 
 
 def _attributes(line):
@@ -310,24 +359,32 @@ def filter_manifest(text, max_height=0, video_codec=VIDEO_AUTO,
     """
     entries = _parse(text)
     changed = False
+    explain = diag.enabled("manifest")
+
+    def step(name, result):
+        nonlocal entries, changed
+        before = len([e for e in entries if e["kind"] == "variant"]), len([e for e in entries if _is_audio(e)])
+        entries, did = result
+        changed |= did
+        if explain:
+            after = len([e for e in entries if e["kind"] == "variant"]), len([e for e in entries if _is_audio(e)])
+            manifest_log.info("filter %s: %s (variants %d -> %d, audio renditions %d -> %d)", name,
+                              "changed" if did else "nothing to do", before[0], after[0], before[1], after[1])
 
     # Order matters: collapsing groups first means the AUDIO= rewrite still
     # sees every variant, before any of them is filtered away.
     if audio_codec in _AUDIO_TAG:
-        entries, did = _collapse_audio_groups(entries, _AUDIO_TAG[audio_codec])
-        changed |= did
-    entries, did = _filter_variants(entries, max_height, video_codec)
-    changed |= did
+        step("one audio group ({})".format(_AUDIO_TAG[audio_codec]),
+             _collapse_audio_groups(entries, _AUDIO_TAG[audio_codec]))
+    step("max height {} / codec {}".format(max_height or "any", _VIDEO_PREFIX.get(video_codec, "any")),
+         _filter_variants(entries, max_height, video_codec))
     # After the codec and resolution filters, so "best" means best of what the
     # device was declared able to play.
     if quality == QUALITY_BEST:
-        entries, did = _keep_best(entries)
-        changed |= did
+        step("best variant only", _keep_best(entries))
     if drop_auto_dubbed:
-        entries, did = _drop_auto_dubbed(entries)
-        changed |= did
-    entries, did = _ensure_default(entries)
-    changed |= did
+        step("drop auto-dubbed audio", _drop_auto_dubbed(entries))
+    step("default audio track", _ensure_default(entries))
 
     if not changed:
         return text, False, _original_language(entries)
@@ -347,9 +404,7 @@ _SUBTITLE_EXTENSIONS = ("srt", "vtt")
 
 def fetch_subtitle(url, headers=None, timeout=20):
     """Bytes of one subtitle file."""
-    request = urllib.request.Request(url, headers=dict(headers or {}))
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return response.read()
+    return fetch(url, headers, timeout)
 
 
 def _primary_language(code):

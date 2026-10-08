@@ -15,7 +15,6 @@ transport, scripts/cast-harness.py against YouTube itself.
 import codecs
 import http.client
 import json
-import logging
 import os
 import random
 import socket
@@ -26,9 +25,10 @@ import time
 import urllib.parse
 import uuid
 
-from . import cast_protocol
+from . import cast_protocol, diag
 
-log = logging.getLogger("cast.lounge")
+log = diag.logger("cast.lounge")
+raw = diag.logger("cast.raw")
 
 HOST = "www.youtube.com"
 GENERATE_SCREEN_ID = "/api/lounge/pairing/generate_screen_id"
@@ -178,28 +178,37 @@ class HttpTransport:
             headers["Content-Type"] = "application/x-www-form-urlencoded"
         with self._lock:
             for attempt in (1, 2):
+                reused = self._connection is not None
                 connection = self._connection or self._connect()
+                started = time.monotonic()
+                note = " (kept-alive connection)" if reused else ""
                 try:
                     connection.request(method, self._target(path, query), body=body, headers=headers)
                     response = connection.getresponse()
                     data = response.read()
-                except (http.client.HTTPException, OSError):
+                except (http.client.HTTPException, OSError) as error:
+                    diag.log_request(method, "https://" + HOST + path, started, error=error,
+                                     note=note + ("" if attempt == 2 else ", retrying"))
                     connection.close()
                     self._connection = None
                     if attempt == 2:
                         raise
                     continue
+                diag.log_request(method, "https://" + HOST + path, started, response.status, len(data), note=note)
                 self._connection = connection
                 return response.status, data.decode("utf-8", "replace")
 
     def open_stream(self, path, query):
         connection = self._connect()
+        started = time.monotonic()
         try:
             connection.request("GET", self._target(path, query), headers={"User-Agent": USER_AGENT})
             response = connection.getresponse()
-        except BaseException:
+        except BaseException as error:
+            diag.log_request("GET", "https://" + HOST + path, started, error=error, note=" (long poll)")
             connection.close()
             raise
+        diag.log_request("GET", "https://" + HOST + path, started, response.status, note=" (long poll opened)")
         if response.status != 200:
             body = response.read(500).decode("utf-8", "replace")
             connection.close()
@@ -361,7 +370,7 @@ class LoungeSession:
         with self._lock:
             for command in commands:
                 if command.code <= self.last_code:
-                    log.debug("command %s already handled, ignored", command.code)
+                    raw.info("command %s already handled, ignored", command.code)
                     continue
                 self.last_code = command.code
                 self.aid = max(self.aid, command.code)
@@ -388,7 +397,7 @@ class LoungeSession:
         parser = cast_protocol.CommandParser()
         try:
             for text in stream.chunks():
-                log.debug("received %r", text)
+                raw.info("received %r", text)
                 fresh = self.accept(parser.feed(text))
                 if fresh:
                     on_commands(fresh)
@@ -414,7 +423,7 @@ class LoungeSession:
             self.ofs += 1
         for key, value in (payload or {}).items():
             form["req0_" + key] = value
-        log.debug("POST %s %r", sc, form)
+        raw.info("POST %s %r", sc, form)
         status, text = self.transport.request("POST", BIND, query=query, form=form)
         if status != 200:
             raise LoungeError("send {}".format(sc), status, text)
@@ -482,7 +491,7 @@ class LoungeWorker(threading.Thread):
                 self.session.listen(self.on_commands)
                 if time.monotonic() - started > 1:
                     failures = 0
-                    log.debug("long poll ended, reopening")
+                    log.info("long poll ended, reopening")
                     continue
                 # Ended at once: something is off; do not spin.
                 failures += 1
