@@ -18,13 +18,12 @@ import queue
 import threading
 import time
 import urllib.parse
-import uuid
 
 import xbmc
 import xbmcaddon
 import xbmcgui
 
-from . import cast_discovery, cast_lounge, cast_receiver, diag, kodilog, paths
+from . import cast_discovery, cast_lounge, cast_receiver, diag, kodilog, paths, request_state
 from .cast_protocol import STATUS_PAUSED, STATUS_PLAYING, STATUS_STOPPED
 
 ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
@@ -34,7 +33,6 @@ HOME = xbmcgui.Window(10000)
 # shows the TV code dialog) -- separate interpreters, so window properties.
 PROP_ONLINE = ADDON_ID + ".cast.online"
 PROP_REMOTES = ADDON_ID + ".cast.remotes"
-PROP_RESOLVED = ADDON_ID + ".cast.resolved"
 
 log = diag.logger("cast.kodi")
 
@@ -73,11 +71,6 @@ def json_rpc(method, params=None):
         log.warning("%s failed: %s", method, reply["error"])
         return None
     return reply.get("result")
-
-
-def mark_resolved(nonce, result):
-    """Called by the plugin: tell the controller how resolving its request went."""
-    HOME.setProperty(PROP_RESOLVED, "{}:{}".format(nonce, result))
 
 
 class _Player(xbmc.Player):
@@ -134,22 +127,20 @@ class KodiPlayback:
         # The nonce comes back from the plugin once it has resolved the video,
         # so the controller knows the item that starts next is the one it asked
         # for -- and not something the user picked in Kodi meanwhile.
-        self.nonce = uuid.uuid4().hex[:12]
-        HOME.clearProperty(PROP_RESOLVED)
+        self.nonce = request_state.new_nonce()
         url = "plugin://{}/?{}".format(ADDON_ID, urllib.parse.urlencode(
-            {"video_id": video_id, "seek": int(seconds), "cast": self.nonce}))
+            {"video_id": video_id, "seek": int(seconds), "req": self.nonce}))
         log.info("Kodi plays %s", url)
         self.player.play(url)
 
     def resolution(self, consume=False):
         """'ok', 'failed: …' or None while the plugin is still resolving."""
-        value = HOME.getProperty(PROP_RESOLVED)
-        if not self.nonce or not value.startswith(self.nonce + ":"):
+        if not self.nonce:
             return None
-        if consume:
-            HOME.clearProperty(PROP_RESOLVED)
+        value = request_state.take(self.nonce) if consume else request_state.peek(self.nonce)
+        if consume and value:
             self.nonce = None
-        return value.split(":", 1)[1]
+        return value or None
 
     def pause(self):
         if xbmc.getCondVisibility("Player.Playing"):

@@ -16,22 +16,54 @@ from . import diag, mp4index
 manifest_log = diag.logger("manifest")
 
 HLS_MIME = "application/vnd.apple.mpegurl"
+DASH_MIME = "application/dash+xml"
 
 # Headers yt-dlp attaches for its own use; forwarding them to InputStream
 # Adaptive is at best useless and at worst breaks the manifest request.
-_SKIP_HEADERS = ("cookie", "youtubei")
+_SKIP_HEADERS = ("youtubei",)
+
+# A playlist link is queued, not played in one go; this many entries at most.
+PLAYLIST_LIMIT = 200
+
+# Cookie attributes in yt-dlp's per-format "cookies" string -- not cookies.
+_COOKIE_ATTRIBUTES = {"domain", "path", "expires", "max-age", "secure", "httponly", "samesite"}
 
 
 def watch_url(video_id):
     return "https://www.youtube.com/watch?v={}".format(video_id)
 
 
-def extract(url, logger=None, verbose=False):
+def is_youtube(info):
+    """Everything YouTube-specific (manifest rewriting, audio swap) keys off this."""
+    return (info.get("extractor_key") or info.get("ie_key") or "").lower().startswith("youtube")
+
+
+def is_playlist(info):
+    return info.get("_type") in ("playlist", "multi_video")
+
+
+def playlist_entries(info):
+    """[(url, title, thumbnail)] of a flat playlist, in order, without the unplayable."""
+    entries = []
+    for entry in info.get("entries") or ():
+        if not entry or not (entry.get("url") or entry.get("webpage_url")):
+            continue
+        thumbnails = entry.get("thumbnails") or ()
+        thumbnail = entry.get("thumbnail") or (thumbnails[-1].get("url") if thumbnails else None)
+        entries.append((entry.get("webpage_url") or entry["url"], entry.get("title") or entry.get("id") or "",
+                        thumbnail))
+    return entries
+
+
+def extract(url, logger=None, verbose=False, flat_playlists=False):
     """yt-dlp's info dict for url.
 
     logger, when given, receives yt-dlp's messages (debug/warning/error, as
     yt-dlp's logger interface defines them); without one it stays silent.
     verbose turns on yt-dlp's own verbose mode: versions, clients, requests.
+    flat_playlists lists a playlist's entries without resolving each of them
+    (they are resolved one by one as Kodi reaches them); a single video is
+    extracted in full either way.
     """
     # Imported here, not at module level: the plugin first puts the right yt-dlp
     # on sys.path (ytdlp_loader.activate), and only then may it be imported.
@@ -47,6 +79,9 @@ def extract(url, logger=None, verbose=False):
         options["logger"] = logger
     if verbose:
         options["verbose"] = True
+    if flat_playlists:
+        options["extract_flat"] = "in_playlist"
+        options["playlistend"] = PLAYLIST_LIMIT
     with YoutubeDL(options) as ydl:
         return ydl.sanitize_info(ydl.extract_info(url, download=False))
 
@@ -60,26 +95,98 @@ def pick_hls(info):
     """
     for fmt in info.get("formats") or ():
         if fmt.get("protocol") == "m3u8_native" and fmt.get("manifest_url"):
-            return fmt["manifest_url"], fmt.get("http_headers") or {}
+            return fmt["manifest_url"], headers_for(info, fmt)
     return None, None
 
 
-def pick_progressive(info):
-    """Best single file carrying both tracks.
-
-    Only a fallback: most YouTube videos no longer offer a muxed format at all.
-    """
-    best = None
+def pick_dash(info):
+    """(manifest_url, headers) of a DASH manifest, or (None, None) -- for sites without HLS."""
     for fmt in info.get("formats") or ():
-        if fmt.get("protocol") not in ("https", "http"):
-            continue
-        if fmt.get("vcodec") in (None, "none") or fmt.get("acodec") in (None, "none"):
-            continue
-        if best is None or (fmt.get("height") or 0) > (best.get("height") or 0):
-            best = fmt
-    if best is None:
+        if fmt.get("protocol") == "http_dash_segments" and fmt.get("manifest_url"):
+            return fmt["manifest_url"], headers_for(info, fmt)
+    return None, None
+
+
+# Containers Kodi's own player decodes without surprises, best first.
+_CONTAINERS = ("mp4", "m4v", "mov", "webm", "mkv")
+
+
+def pick_progressive(info):
+    """Best single file carrying both tracks, for Kodi's own player.
+
+    Most YouTube videos no longer offer one, but other sites often offer
+    nothing else -- and often say little about it: Facebook's "sd" and "hd" are
+    MP4 files with no codec or height in the metadata, archive.org's likewise.
+    A format is skipped only when it is known to lack a track; then known
+    codecs beat unknown ones, height beats nothing, a container Kodi plays well
+    beats the rest, and where nothing tells them apart (Facebook) the format
+    yt-dlp itself chose wins.
+    """
+    chosen = info.get("format_id")
+
+    def rank(fmt):
+        known = fmt.get("vcodec") not in (None, "none") and fmt.get("acodec") not in (None, "none")
+        container = (fmt.get("ext") or "").lower()
+        return (known, fmt.get("height") or 0, container in _CONTAINERS, fmt.get("format_id") == chosen,
+                fmt.get("tbr") or 0)
+
+    candidates = [
+        fmt for fmt in info.get("formats") or ()
+        if fmt.get("protocol") in ("https", "http") and fmt.get("url")
+        and fmt.get("vcodec") != "none" and fmt.get("acodec") != "none"
+    ]
+    if not candidates and info.get("url") and info.get("protocol") in ("https", "http"):
+        candidates = [info]  # a site that returns one file and no format list
+    if not candidates:
         return None, None
-    return best["url"], best.get("http_headers") or {}
+    best = max(candidates, key=rank)
+    return best["url"], headers_for(info, best)
+
+
+def pick_audio_only(info):
+    """Best audio file, for sites that have no video at all (podcasts, music)."""
+    if any(fmt.get("vcodec") not in ("none",) for fmt in info.get("formats") or ()):
+        return None, None
+    candidates = [fmt for fmt in info.get("formats") or ()
+                  if fmt.get("protocol") in ("https", "http") and fmt.get("url") and fmt.get("acodec") != "none"]
+    if not candidates:
+        return None, None
+    best = max(candidates, key=lambda fmt: (fmt.get("abr") or fmt.get("tbr") or 0))
+    return best["url"], headers_for(info, best)
+
+
+def _cookie_header(cookies):
+    """yt-dlp's "name=value; Domain=...; Path=...; name2=..." as a Cookie header value."""
+    pairs = []
+    for part in (cookies or "").split(";"):
+        name, sep, value = part.strip().partition("=")
+        if sep and name and name.lower() not in _COOKIE_ATTRIBUTES:
+            pairs.append("{}={}".format(name, value))
+    return "; ".join(pairs)
+
+
+def headers_for(info, fmt):
+    """The headers a player needs to fetch this format, as yt-dlp would send them.
+
+    Cookies only off YouTube: there they are yt-dlp's own business and only get
+    in the way, while elsewhere (archive.org, CDNs that set a session cookie on
+    the page) the media request may need them.
+    """
+    headers = dict(fmt.get("http_headers") or info.get("http_headers") or {})
+    if is_youtube(info):
+        headers = {key: value for key, value in headers.items() if key.lower() != "cookie"}
+    else:
+        cookie = _cookie_header(fmt.get("cookies") or info.get("cookies"))
+        if cookie:
+            headers["Cookie"] = cookie
+    return headers
+
+
+def kodi_url(url, headers):
+    """A URL with headers in Kodi's own "url|Name=value&..." form, for its player."""
+    usable = {key: value for key, value in (headers or {}).items()
+              if value and not key.lower().startswith(_SKIP_HEADERS)}
+    return url + ("|" + urllib.parse.urlencode(usable) if usable else "")
 
 
 def encode_headers(headers):

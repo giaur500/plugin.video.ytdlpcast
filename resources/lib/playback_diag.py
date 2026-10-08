@@ -29,6 +29,8 @@ from . import diag
 ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
 HOME = xbmcgui.Window(10000)
 PROP_PLAYING = ADDON_ID + ".playing"
+# What the plugin last handed Kodi, kept (not consumed) for the web interface.
+PROP_SOURCE = ADDON_ID + ".playing.source"
 MARK_FRESH = 120  # seconds from resolving to the player starting, at most
 POLL = 2.0
 SEEK_SETTLE = 5.0  # buffering this soon after a seek is the seek, not a stall
@@ -36,10 +38,20 @@ SEEK_SETTLE = 5.0  # buffering this soon after a seek is the seek, not a stall
 log = diag.logger("player")
 
 
-def mark_playing(video_id, kind, rewritten):
+def mark_playing(video_id, kind, rewritten, source=None, site=None, title=None):
     """Called by the plugin: the next start is ours."""
-    HOME.setProperty(PROP_PLAYING, json.dumps(
-        {"id": video_id, "kind": kind, "rewritten": bool(rewritten), "at": time.time()}))
+    mark = {"id": video_id, "kind": kind, "rewritten": bool(rewritten), "source": source, "site": site,
+            "title": title, "at": time.time()}
+    HOME.setProperty(PROP_PLAYING, json.dumps(mark))
+    HOME.setProperty(PROP_SOURCE, json.dumps(mark))
+
+
+def last_source():
+    """The plugin's last mark -- link, site, title -- or None."""
+    try:
+        return json.loads(HOME.getProperty(PROP_SOURCE) or "null")
+    except ValueError:
+        return None
 
 
 def _take_mark():

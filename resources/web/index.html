@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>yt-dlp Cast</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>yt-dlp Cast</h1>
+  <nav>
+    <button class="tab active" data-tab="player" data-i18n="tabPlayer">Player</button>
+    <button class="tab" data-tab="log" data-i18n="tabLog">Log</button>
+  </nav>
+</header>
+
+<main>
+  <section id="player" class="panel active">
+    <form id="play-form" autocomplete="off">
+      <input id="url" type="url" inputmode="url" required data-i18n-placeholder="urlPlaceholder"
+             placeholder="Link to a video or playlist (YouTube or any site yt-dlp supports)">
+      <div class="buttons">
+        <button type="submit" class="primary" data-mode="now" data-i18n="playNow">Play</button>
+        <button type="submit" data-mode="queue" data-i18n="addToQueue">Add to queue</button>
+      </div>
+      <p id="request" class="request" hidden></p>
+    </form>
+
+    <article id="now" class="now idle">
+      <img id="thumb" alt="" hidden>
+      <div class="meta">
+        <p id="state" class="state" data-i18n="stopped">Nothing is playing</p>
+        <h2 id="title"></h2>
+        <p id="site" class="site"></p>
+      </div>
+      <div class="timeline">
+        <span id="time">0:00</span>
+        <input id="seek" type="range" min="0" max="0" step="1" value="0" disabled>
+        <span id="duration">0:00</span>
+      </div>
+      <div class="controls">
+        <button data-action="previous" data-i18n-title="previous" title="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+        <button data-action="back" data-i18n-title="back10" title="Back 10 s">&minus;10</button>
+        <button data-action="toggle" id="toggle" class="big" data-i18n-title="pause" title="Pause"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5l9 7-9 7zM14 5h2.5v14H14zM18.5 5H21v14h-2.5z"/></svg></button>
+        <button data-action="forward" data-i18n-title="forward30" title="Forward 30 s">+30</button>
+        <button data-action="next" data-i18n-title="next" title="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM4 5l11 7-11 7z"/></svg></button>
+        <button data-action="stop" data-i18n-title="stop" title="Stop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg></button>
+      </div>
+    </article>
+
+    <section id="queue" class="queue" hidden>
+      <h3 data-i18n="queue">Queue</h3>
+      <ol id="queue-items"></ol>
+    </section>
+  </section>
+
+  <section id="log" class="panel">
+    <div class="log-tools">
+      <div class="chips" id="chips"></div>
+      <input id="log-filter" type="search" data-i18n-placeholder="filter" placeholder="Filter">
+      <label class="check"><input id="follow" type="checkbox" checked> <span data-i18n="follow">Follow</span></label>
+      <button id="download" data-i18n="download">Download</button>
+    </div>
+    <p class="hint" data-i18n="logHint">This add-on's lines and InputStream Adaptive's. More detail: Settings → Diagnostics (Expert level).</p>
+    <div id="log-lines" class="log-lines" role="log" aria-live="off"></div>
+  </section>
+</main>
+
+<div id="pin" class="overlay" hidden>
+  <form id="pin-form" class="pin-box">
+    <h2 data-i18n="pinTitle">PIN</h2>
+    <p data-i18n="pinText">Enter the PIN shown in the add-on's settings, under Web interface.</p>
+    <input id="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" required>
+    <button type="submit" class="primary" data-i18n="pinOk">OK</button>
+    <p id="pin-error" class="error" hidden></p>
+  </form>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

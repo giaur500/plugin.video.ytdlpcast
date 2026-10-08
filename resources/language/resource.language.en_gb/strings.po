@@ -43,7 +43,7 @@ msgid "InputStream Adaptive 21 detects HLS from the mime type. Enable this only 
 msgstr ""
 
 msgctxt "#30110"
-msgid "Picture & sound"
+msgid "Picture & sound (YouTube)"
 msgstr ""
 
 msgctxt "#30111"
@@ -132,11 +132,11 @@ msgstr ""
 
 
 msgctxt "#30150"
-msgid "Rewrite the manifest (enables the settings below)"
+msgid "Rewrite YouTube's manifest (enables the settings below)"
 msgstr ""
 
 msgctxt "#30151"
-msgid "The settings below work by rewriting YouTube's HLS master playlist and serving the copy from 127.0.0.1 to InputStream Adaptive. Switch this off to hand over YouTube's manifest untouched, exactly as version 1.0 did — no rewriting, no local server."
+msgid "YouTube only: videos from other sites always play with their manifest as published, whatever is set here — the rewrite fixes YouTube's own quirks, which other sites do not have. The settings below work by rewriting YouTube's HLS master playlist and serving the copy from 127.0.0.1 to InputStream Adaptive. Switch this off to hand over YouTube's manifest untouched, exactly as version 1.0 did — no rewriting, no local server."
 msgstr ""
 
 msgctxt "#30152"
@@ -426,4 +426,64 @@ msgstr ""
 
 msgctxt "#30229"
 msgid "The add-on's service: start-up and shutdown with their timing, the manifest server, settings changes as they are applied, and the update schedule."
+msgstr ""
+
+msgctxt "#30230"
+msgid "Web interface"
+msgstr ""
+
+msgctxt "#30231"
+msgid "Enable the web interface"
+msgstr ""
+
+msgctxt "#30232"
+msgid "A page for any browser on the local network: paste a link to a video or a playlist — YouTube or any other site yt-dlp supports — to play it or add it to the queue, see what is playing, seek, pause, stop, and read the add-on's log. Off by default, because it opens a port on the network."
+msgstr ""
+
+msgctxt "#30233"
+msgid "Address"
+msgstr ""
+
+msgctxt "#30234"
+msgid "Open this address in a browser on a phone or computer in the same network. A link added to it as ?play=<link> is played right away."
+msgstr ""
+
+msgctxt "#30235"
+msgid "Require a PIN"
+msgstr ""
+
+msgctxt "#30236"
+msgid "Off: anyone on the local network can use the page. On: a browser asks once for this PIN and remembers it."
+msgstr ""
+
+msgctxt "#30237"
+msgid "PIN"
+msgstr ""
+
+msgctxt "#30238"
+msgid "New PIN"
+msgstr ""
+
+msgctxt "#30239"
+msgid "Replaces the PIN; every browser that knew the old one has to enter the new one."
+msgstr ""
+
+msgctxt "#30240"
+msgid "Port"
+msgstr ""
+
+msgctxt "#30241"
+msgid "The page is served on this port, on every address of the box. Change it only if another program already uses it."
+msgstr ""
+
+msgctxt "#30242"
+msgid "Web interface requests"
+msgstr ""
+
+msgctxt "#30243"
+msgid "Every request to the web interface: address of the browser, method, path, status."
+msgstr ""
+
+msgctxt "#30244"
+msgid "New web interface PIN: {}"
 msgstr ""

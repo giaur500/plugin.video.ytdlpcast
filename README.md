@@ -1,8 +1,9 @@
 # yt-dlp Cast (plugin.video.ytdlpcast)
 
-Cast YouTube from the phone app to Kodi. Kodi shows up as a TV in the YouTube app; each video
-is resolved by **yt-dlp** and played through **InputStream Adaptive** — streaming, seekable,
-with nothing written to disk.
+Cast YouTube from the phone app to Kodi — or paste a link to any site yt-dlp supports into the
+add-on's web page. Kodi shows up as a TV in the YouTube app; each video is resolved by
+**yt-dlp** and played through **InputStream Adaptive** (or Kodi's own player for single files)
+— streaming, seekable, with nothing written to disk.
 
 Up to version 1.2 this add-on was only the playback back end for a fork of TubeCast. TubeCast
 is no longer maintained, so since 2.0 the add-on receives casts itself and needs no other
@@ -47,6 +48,69 @@ once if it finds TubeCast enabled.
 **Log.** Phones connecting and leaving and the screen going online are always logged. Every
 other step — discovery, pairing, each command from the phone (`<-`) and each report back
 (`->`), the raw protocol — has its own switch under *Diagnostics*.
+
+## Web interface
+
+*Settings → Web interface → Enable the web interface* (off by default: it opens a port on the
+network) serves a page on `http://<box>:50154` for any browser on the local network — the
+exact address is shown right below the switch. The page:
+
+* plays a pasted link at once, or adds it to the queue — a video or a whole playlist, from
+  YouTube or any other site yt-dlp supports;
+* shows what is playing: title, site, thumbnail, a seek bar, pause/resume, stop, ±10/30 s,
+  previous/next, and the queue, where a click jumps to an entry;
+* says how the request went: resolving, queued, playing — or yt-dlp's own reason when it fails
+  ("…only works when logged-in");
+* shows the log live: this add-on's lines and InputStream Adaptive's, filterable by area
+  (`resolve`, `manifest`, `player`, `cast`, …) or problems only, and downloadable. Other
+  add-ons' lines are never shown.
+
+The page is plain HTML and JavaScript with no outside resources, in English or Polish after
+the browser's language.
+
+**Send any page from a desktop browser.** `http://<box>:50154/?play=<link>` plays the link at
+once, so a bookmark with this location sends the page you are on to Kodi:
+
+```
+javascript:void(window.open('http://192.168.1.10:50154/?play='+encodeURIComponent(location.href)))
+```
+
+**Access.** Without a PIN (the default) anyone on the local network can use the page. *Require
+a PIN* shows a six-digit PIN in the settings; a browser asks for it once and remembers it, five
+wrong tries lock that address out for a minute, and *New PIN* signs every browser out. With or
+without a PIN, a request that changes something must be JSON from the page itself, so a web
+page open in some browser on the network cannot make Kodi play anything.
+
+**Playlists.** A playlist link becomes a queue in Kodi's own video playlist, up to 200 entries,
+each resolved only when Kodi gets to it — so the first video starts as fast as a single one.
+
+## Other sites
+
+yt-dlp extracts from well over a thousand sites. What the add-on does with the result:
+
+1. an **HLS** manifest goes to InputStream Adaptive;
+2. else a **DASH** manifest does;
+3. else the best **single file** with picture and sound plays in Kodi's own player — with
+   the headers and cookies yt-dlp used, and seekable when the server allows ranges. Formats
+   whose codecs yt-dlp does not know are allowed: Facebook and archive.org report none;
+4. else, for sites with no video at all, the best **audio** file.
+
+**The manifest is rewritten for YouTube only.** Every rewriting step answers a YouTube quirk —
+packed audio silent until the first seek, two duplicate audio groups, no default track,
+machine-dubbed tracks. Other sites' manifests have none of these and play exactly as
+published; the *Picture & sound* settings say so.
+
+Checked on 2026-10-08:
+
+| site | how it plays |
+|---|---|
+| YouTube | HLS, rewritten per *Picture & sound* |
+| Dailymotion | HLS as published |
+| Facebook (public videos) | the "hd" file, 720p, picture and sound in one MP4; some links fail inside yt-dlp ("Cannot parse data") |
+| archive.org | the largest file (e.g. AVI 720p), with the site's cookies |
+| Vimeo | needs an account — yt-dlp says so, and the web page shows it |
+
+Sites that need an account, private and group videos do not play: the add-on does not log in.
 
 ## How it works
 
@@ -139,6 +203,7 @@ which Kodi 21 logs without its own debug mode — under its own prefix,
 | Cast: raw protocol traffic | `cast/raw:` | the protocol as received and sent, position reports and keep-alives included |
 | Local network discovery: every packet | `cast/discovery:` | every SSDP packet that arrives and the headers of each DIAL request — "the phone does not see Kodi" |
 | Background service | `service:` | start-up and shutdown timing, settings changes as applied, the update schedule |
+| Web interface requests | `web:` | every request to the web page: browser address, method, path, status |
 
 The *Kodi player* switch runs a small watcher in the service only while it is on. It follows
 only what this add-on resolved: the plugin marks each item right before handing it to Kodi.
@@ -146,7 +211,7 @@ only what this add-on resolved: the plugin marks each item right before handing 
 ## Usage
 
 From the phone: open a video in the YouTube app, tap the cast button, pick
-`<Kodi's name> (yt-dlp)`.
+`<Kodi's name> (yt-dlp)`. From any browser: the web interface above.
 
 From Kodi itself — a keymap, a favourite, another add-on:
 
@@ -159,7 +224,7 @@ Parameters:
 | parameter | meaning |
 |---|---|
 | `video_id` | YouTube video id |
-| `url` | full URL, used instead of `video_id`; anything yt-dlp supports |
+| `url` | full URL, used instead of `video_id`; anything yt-dlp supports (a playlist link plays its first video) |
 | `seek` | start position in seconds |
 | `start_offset` | accepted as an alias of `seek`, for Tubed-shaped URLs |
 
@@ -176,6 +241,13 @@ Parameters:
 * **Link with a TV code** — shows a code for *Settings → Watch on TV → Enter TV code* in the
   app, until a phone links, the dialog is cancelled or five minutes pass.
 
+### Web interface
+
+* **Enable the web interface** — off by default.
+* **Address** — read-only: where to open the page.
+* **Require a PIN** — off by default; **PIN** (read-only) and **New PIN** appear when it is on.
+* **Port** — `50154` by default (advanced level).
+
 ### How the picture and sound settings work
 
 The add-on never asks yt-dlp to choose a format — InputStream Adaptive picks the variant. So
@@ -189,7 +261,7 @@ version 1.1.0's bug).
 Whenever the rewrite cannot be delivered — switched off, server not running, manifest fetch
 failed, nothing changed — the add-on hands over YouTube's original URL, exactly as 1.0 did.
 
-### Picture & sound
+### Picture & sound (YouTube only)
 
 * **Rewrite the manifest** — on by default; the master switch for everything below. Off means
   YouTube's manifest untouched, no local server involved.

@@ -43,8 +43,8 @@ msgid "InputStream Adaptive 21 detects HLS from the mime type. Enable this only 
 msgstr "InputStream Adaptive 21 rozpoznaje HLS po typie MIME. Włącz tylko wtedy, gdy na starszej wersji odtwarzanie kończy się błędem typu manifestu."
 
 msgctxt "#30110"
-msgid "Picture & sound"
-msgstr "Obraz i dźwięk"
+msgid "Picture & sound (YouTube)"
+msgstr "Obraz i dźwięk (YouTube)"
 
 msgctxt "#30111"
 msgid "Maximum resolution"
@@ -127,12 +127,12 @@ msgid "Downloads every subtitle track the video's author uploaded, as files Kodi
 msgstr "Pobiera wszystkie napisy wgrane przez autora filmu jako pliki, którym Kodi nadaje etykiety językowe. Kodi samo wybiera ścieżkę pasującą do swojego ustawienia „Preferowany język napisów”. Napisy automatyczne YouTube nie są używane: to wynik pracy maszyny, a ich tłumaczenia wymagają podszycia się pod przeglądarkę na poziomie TLS, czego żaden dodatek Kodi nie zapewni."
 
 msgctxt "#30150"
-msgid "Rewrite the manifest (enables the settings below)"
-msgstr "Przepisuj manifest (włącza ustawienia poniżej)"
+msgid "Rewrite YouTube's manifest (enables the settings below)"
+msgstr "Przepisuj manifest YouTube (włącza ustawienia poniżej)"
 
 msgctxt "#30151"
-msgid "The settings below work by rewriting YouTube's HLS master playlist and serving the copy from 127.0.0.1 to InputStream Adaptive. Switch this off to hand over YouTube's manifest untouched, exactly as version 1.0 did — no rewriting, no local server."
-msgstr "Ustawienia poniżej działają przez przepisanie manifestu HLS YouTube i udostępnienie kopii z adresu 127.0.0.1 dla InputStream Adaptive. Wyłącz, aby przekazywać manifest YouTube nietknięty, dokładnie jak w wersji 1.0 — bez przepisywania i bez lokalnego serwera."
+msgid "YouTube only: videos from other sites always play with their manifest as published, whatever is set here — the rewrite fixes YouTube's own quirks, which other sites do not have. The settings below work by rewriting YouTube's HLS master playlist and serving the copy from 127.0.0.1 to InputStream Adaptive. Switch this off to hand over YouTube's manifest untouched, exactly as version 1.0 did — no rewriting, no local server."
+msgstr "Dotyczy tylko YouTube: filmy z innych serwisów zawsze grają z manifestem w postaci opublikowanej, niezależnie od tych ustawień — przepisywanie naprawia przypadłości samego YouTube, których inne serwisy nie mają. Ustawienia poniżej działają przez przepisanie manifestu HLS YouTube i udostępnienie kopii z adresu 127.0.0.1 dla InputStream Adaptive. Wyłącz, aby przekazywać manifest YouTube nietknięty, dokładnie jak w wersji 1.0 — bez przepisywania i bez lokalnego serwera."
 
 msgctxt "#30152"
 msgid "Quality selection"
@@ -422,3 +422,63 @@ msgstr "Usługa w tle"
 msgctxt "#30229"
 msgid "The add-on's service: start-up and shutdown with their timing, the manifest server, settings changes as they are applied, and the update schedule."
 msgstr "Usługa wtyczki: uruchamianie i zamykanie z czasami, serwer manifestów, zmiany ustawień w chwili zastosowania i harmonogram aktualizacji."
+
+msgctxt "#30230"
+msgid "Web interface"
+msgstr "Interfejs WWW"
+
+msgctxt "#30231"
+msgid "Enable the web interface"
+msgstr "Włącz interfejs WWW"
+
+msgctxt "#30232"
+msgid "A page for any browser on the local network: paste a link to a video or a playlist — YouTube or any other site yt-dlp supports — to play it or add it to the queue, see what is playing, seek, pause, stop, and read the add-on's log. Off by default, because it opens a port on the network."
+msgstr "Strona dla dowolnej przeglądarki w sieci lokalnej: wklej link do filmu lub playlisty — z YouTube albo innego serwisu obsługiwanego przez yt-dlp — żeby go odtworzyć lub dodać do kolejki, zobacz, co gra, przewijaj, pauzuj, zatrzymuj i czytaj log wtyczki. Domyślnie wyłączone, bo otwiera port w sieci."
+
+msgctxt "#30233"
+msgid "Address"
+msgstr "Adres"
+
+msgctxt "#30234"
+msgid "Open this address in a browser on a phone or computer in the same network. A link added to it as ?play=<link> is played right away."
+msgstr "Otwórz ten adres w przeglądarce na telefonie lub komputerze w tej samej sieci. Link dopisany jako ?play=<link> zostanie od razu odtworzony."
+
+msgctxt "#30235"
+msgid "Require a PIN"
+msgstr "Wymagaj PIN-u"
+
+msgctxt "#30236"
+msgid "Off: anyone on the local network can use the page. On: a browser asks once for this PIN and remembers it."
+msgstr "Wyłączone: każdy w sieci lokalnej może korzystać ze strony. Włączone: przeglądarka raz pyta o ten PIN i go zapamiętuje."
+
+msgctxt "#30237"
+msgid "PIN"
+msgstr "PIN"
+
+msgctxt "#30238"
+msgid "New PIN"
+msgstr "Nowy PIN"
+
+msgctxt "#30239"
+msgid "Replaces the PIN; every browser that knew the old one has to enter the new one."
+msgstr "Zastępuje PIN; każda przeglądarka, która znała stary, musi wpisać nowy."
+
+msgctxt "#30240"
+msgid "Port"
+msgstr "Port"
+
+msgctxt "#30241"
+msgid "The page is served on this port, on every address of the box. Change it only if another program already uses it."
+msgstr "Strona jest serwowana na tym porcie, na każdym adresie urządzenia. Zmień go tylko, jeśli używa go już inny program."
+
+msgctxt "#30242"
+msgid "Web interface requests"
+msgstr "Interfejs WWW: żądania"
+
+msgctxt "#30243"
+msgid "Every request to the web interface: address of the browser, method, path, status."
+msgstr "Każde żądanie do interfejsu WWW: adres przeglądarki, metoda, ścieżka, status."
+
+msgctxt "#30244"
+msgid "New web interface PIN: {}"
+msgstr "Nowy PIN interfejsu WWW: {}"

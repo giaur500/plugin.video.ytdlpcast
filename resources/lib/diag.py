@@ -37,6 +37,7 @@ SWITCHES = {
     "diag_cast_traffic": ("cast.raw",),
     "diag_discovery": ("cast.discovery",),
     "diag_service": ("service",),
+    "diag_web": ("web",),
 }
 ALL = "diag_all"
 

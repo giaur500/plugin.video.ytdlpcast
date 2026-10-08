@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="plugin.video.ytdlpcast"
        name="yt-dlp Cast"
-       version="2.1.0"
+       version="2.2.0"
        provider-name="michal">
 
     <requires>
@@ -18,9 +18,14 @@
     <extension point="xbmc.addon.metadata">
         <summary lang="en_GB">Cast YouTube from your phone to Kodi, played through yt-dlp</summary>
         <summary lang="pl_PL">Przesyłaj YouTube z telefonu do Kodi, odtwarzane przez yt-dlp</summary>
-        <description lang="en_GB">Kodi shows up as a TV in the YouTube app: pick it from the cast menu, or link it once with a TV code. Every video is resolved by yt-dlp, which the add-on keeps current by itself, and played by InputStream Adaptive from YouTube's HLS manifest -- streamed, with seeking and quality switching, nothing downloaded first. No other add-on is needed for casting. Anything else in Kodi can play a video through it with plugin://plugin.video.ytdlpcast/?video_id=ID</description>
-        <description lang="pl_PL">Kodi pojawia się jako telewizor w aplikacji YouTube: wybierz go w menu przesyłania albo połącz raz kodem TV. Każdy film rozwiązuje yt-dlp, który dodatek sam aktualizuje, a odtwarza InputStream Adaptive z manifestu HLS YouTube -- strumieniowo, z przewijaniem i zmianą jakości, bez wcześniejszego pobierania. Do przesyłania nie jest potrzebny żaden inny dodatek. Inne elementy Kodi mogą odtworzyć przez niego film adresem plugin://plugin.video.ytdlpcast/?video_id=ID</description>
-        <news>v2.1.0
+        <description lang="en_GB">Kodi shows up as a TV in the YouTube app: pick it from the cast menu, or link it once with a TV code. Every video is resolved by yt-dlp, which the add-on keeps current by itself, and played by InputStream Adaptive from YouTube's HLS manifest -- streamed, with seeking and quality switching, nothing downloaded first. No other add-on is needed for casting. An optional web interface plays any link yt-dlp supports -- YouTube, Dailymotion, Facebook, archive.org and many more, whole playlists as a queue -- shows what is playing with a seek bar, and the add-on's log.</description>
+        <description lang="pl_PL">Kodi pojawia się jako telewizor w aplikacji YouTube: wybierz go w menu przesyłania albo połącz raz kodem TV. Każdy film rozwiązuje yt-dlp, który dodatek sam aktualizuje, a odtwarza InputStream Adaptive z manifestu HLS YouTube -- strumieniowo, z przewijaniem i zmianą jakości, bez wcześniejszego pobierania. Do przesyłania nie jest potrzebny żaden inny dodatek. Opcjonalny interfejs WWW odtwarza dowolny link obsługiwany przez yt-dlp -- YouTube, Dailymotion, Facebook, archive.org i wiele innych, całe playlisty jako kolejkę -- pokazuje, co gra, z suwakiem przewijania, oraz log wtyczki.</description>
+        <news>v2.2.0
+- Web interface (off by default, optional PIN): play or queue any yt-dlp link, seek, pause, stop, read the log
+- Other sites: DASH manifests, single files with unknown codecs (Facebook, archive.org), audio-only sites, headers and cookies
+- Playlist links become a queue in Kodi's video playlist; links with ?t= start there
+- Manifest rewriting is YouTube-only; other sites play their manifest as published
+v2.1.0
 - Diagnostics tab (Expert settings level): one switch per area, all off by default
 - Settings - yt-dlp shows the version in use and how the last update check went
 - Without diagnostics only one summary line per playback, warnings and errors are logged

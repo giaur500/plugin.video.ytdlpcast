@@ -24,8 +24,8 @@ import time
 import xbmc
 import xbmcaddon
 
-from resources.lib import (cast_kodi, diag, kodilog, manifest_server, paths, playback_diag, ytdlp_info,
-                           ytdlp_loader)
+from resources.lib import (cast_kodi, diag, kodilog, manifest_server, paths, playback_diag, web_kodi,
+                           ytdlp_info, ytdlp_loader)
 
 ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
 
@@ -76,7 +76,7 @@ class Service(xbmc.Monitor):
         # Rewritten manifests, kept originals and downloaded subtitles are
         # per-playback scratch; anything left from a previous run is stale.
         removed = 0
-        for pattern in ("*.m3u8", "*.srt", "*.original.txt"):
+        for pattern in ("*.m3u8", "*.srt", "*.original.txt", os.path.join("cache", "*.json")):
             for stale in glob.glob(os.path.join(self.root, pattern)):
                 try:
                     os.remove(stale)
@@ -89,6 +89,8 @@ class Service(xbmc.Monitor):
         self.cast_settings = cast_kodi.read_settings()
         self.cast = cast_kodi.start(self.cast_settings)
         self.player_diag = playback_diag.start(player_diagnostics_wanted(self.switches))
+        self.web_settings = web_kodi.read_settings()
+        self.web = web_kodi.start(self.web_settings)
         service_log.info("started in %.1f s; first yt-dlp check in %d s", time.monotonic() - started,
                          FIRST_CHECK_DELAY)
 
@@ -116,6 +118,17 @@ class Service(xbmc.Monitor):
             self.cast_settings = settings
             cast_kodi.stop(self.cast)
             self.cast = cast_kodi.start(settings)
+
+        web = web_kodi.read_settings()
+        if (web["enabled"], web["port"]) != (self.web_settings["enabled"], self.web_settings["port"]) or (
+                web["enabled"] and not self.web):
+            if web != self.web_settings:
+                log("web interface settings changed, restarting it")
+            web_kodi.stop(self.web)
+            self.web = web_kodi.start(web)
+        elif self.web and self.web.auth_outdated(web):
+            self.web.reload_auth(web)
+        self.web_settings = web
 
     def check_ytdlp(self):
         addon = xbmcaddon.Addon()  # fresh: settings may have changed since start
@@ -149,6 +162,7 @@ class Service(xbmc.Monitor):
             service_log.info("next yt-dlp check in %d h", CHECK_INTERVAL // 3600)
         stopping = time.monotonic()
         cast_kodi.stop(self.cast)
+        web_kodi.stop(self.web)
         playback_diag.stop(self.player_diag)
         if self.server:
             self.server.stop()
