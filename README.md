@@ -155,7 +155,11 @@ followed by a ZIP of the package's Python sources, which Python can import direc
 downloads that file, checks it, and puts it on `sys.path`.
 
 * **When**: a minute after Kodi starts, then once a day, in the background service — never
-  during playback. **Settings → yt-dlp → Check for updates now** checks immediately.
+  during playback. *Update automatically* switches this off; yt-dlp then changes only by hand.
+* **By hand**: **Settings → yt-dlp → Check for updates now** shows the version in use and the
+  newest one on the channel. When there is a newer one, *Update* downloads, checks and compiles
+  it with a progress dialog, and a final message says whether it is ready — the next playback
+  then uses it. *Cancel* leaves everything as it was.
 * **Channel**: *Nightly* (default) is built every day from the project's main branch, and
   fixes for YouTube changes land there first. *Stable* is released less often; yt-dlp promises
   a release at least every 90 days.
@@ -169,10 +173,21 @@ downloads that file, checks it, and puts it on `sys.path`.
   getting fresher, and the log says so.
 * **What runs**: *Settings → yt-dlp* shows the version in use (downloaded or the bundled copy,
   and the channel) and when and how the last check went.
-* **Storage**: `addon_data/plugin.video.ytdlpcast/ytdlp/`, one file per version, never
+* **Compiled once**: every plugin call is a fresh Python interpreter, and importing from the
+  archive would compile about a hundred yt-dlp modules from source each time — seconds per
+  playback on an ARM box. So the service extracts each version it will use and byte-compiles it
+  once, in the background (after an update, and for the bundled copy at start); playback then
+  loads the compiled files. Until that is done, the archive is used as before.
+* **No `\N{…}` escapes**: before anything compiles yt-dlp, the add-on rewrites the `\N{NAME}`
+  escapes in its string literals as `\uXXXX`. Kodi 21's Python (3.11) decodes `\N{}` through a
+  pointer kept for the whole process, set by the first interpreter that needs it; Kodi ends
+  that interpreter after the plugin call, and the next `\N{}` anywhere in Kodi then crashed it.
+  Python 3.12 fixed this; until Kodi ships it, no `\N{}` is ever decoded here.
+* **Storage**: `addon_data/plugin.video.ytdlpcast/ytdlp/`, one archive per version, never
   overwritten in place (zipimport caches a ZIP's directory per path), current and previous
-  kept. The copy shipped in the add-on (stable) is used until the first download succeeds, so
-  the very first playback works offline too.
+  kept, plus the compiled directories of the copy in use and of the bundled one. The copy
+  shipped in the add-on (stable) is used until the first download succeeds, so the very first
+  playback works offline too.
 
 The checksum guards against a corrupted download, not against a compromised release: trust
 ends at the yt-dlp project's GitHub releases, as it did with any repackaged module.

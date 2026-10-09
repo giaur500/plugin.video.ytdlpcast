@@ -188,7 +188,7 @@ msgid "Update automatically"
 msgstr ""
 
 msgctxt "#30166"
-msgid "Checks for a new yt-dlp a minute after Kodi starts and then once a day, in the background. A new version is used only after it has been checked against Kodi's Python: one that needs a newer Python is rejected and the current one stays."
+msgid "Checks for a new yt-dlp a minute after Kodi starts and then once a day, in the background, and compiles it once so playback starts fast. A new version is used only after it has been checked against Kodi's Python: one that needs a newer Python is rejected and the current one stays. Off: yt-dlp changes only when you choose Update under Check for updates now."
 msgstr ""
 
 msgctxt "#30167"
@@ -196,7 +196,7 @@ msgid "Check for updates now"
 msgstr ""
 
 msgctxt "#30168"
-msgid "Checks the selected channel right away and shows the result."
+msgid "Shows the version in use and the newest one on the selected channel. When there is a newer one, Update downloads it, checks it against Kodi's Python and compiles it, showing each step; when it says ready, the next playback uses it. Cancel leaves everything as it was."
 msgstr ""
 
 msgctxt "#30170"
@@ -486,4 +486,52 @@ msgstr ""
 
 msgctxt "#30244"
 msgid "New web interface PIN: {}"
+msgstr ""
+
+msgctxt "#30245"
+msgid "Checking the {} channel…"
+msgstr ""
+
+msgctxt "#30246"
+msgid "Downloading yt-dlp {}…"
+msgstr ""
+
+msgctxt "#30247"
+msgid "Checking it against Kodi's Python…"
+msgstr ""
+
+msgctxt "#30248"
+msgid "Compiling it once, for fast starts…"
+msgstr ""
+
+msgctxt "#30249"
+msgid "yt-dlp {} is installed and ready. The next playback uses it."
+msgstr ""
+
+msgctxt "#30250"
+msgid "Update cancelled; nothing was changed."
+msgstr ""
+
+msgctxt "#30251"
+msgid "yt-dlp {} is installed; compiling it finishes at the next Kodi start."
+msgstr ""
+
+msgctxt "#30252"
+msgid "Newest on the {} channel"
+msgstr ""
+
+msgctxt "#30253"
+msgid "You have the newest version."
+msgstr ""
+
+msgctxt "#30254"
+msgid "A newer version is available."
+msgstr ""
+
+msgctxt "#30255"
+msgid "Close"
+msgstr ""
+
+msgctxt "#30256"
+msgid "Update"
 msgstr ""

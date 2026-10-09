@@ -246,30 +246,94 @@ def prepare_ytdlp():
             version, type(error).__name__, error), xbmc.LOGERROR)
     for name in [name for name in sys.modules if name == "yt_dlp" or name.startswith("yt_dlp.")]:
         del sys.modules[name]
-    version, _ = ytdlp_loader.activate_bundled(paths.bundled_ytdlp())
+    version, _ = ytdlp_loader.activate_bundled(paths.bundled_ytdlp(), store)
     import yt_dlp  # noqa: F401,F811
     ytdlp_loader.mark_broken(store, True)
     ytdlp_info.refresh(ADDON)
     return version, "bundled, fallback"
 
 
+# Manual update: (start %, end %, message) per stage of the progress dialog.
+UPDATE_STAGES = {
+    "check": (0, 5, 30245),
+    "download": (5, 50, 30246),
+    "validate": (50, 75, 30247),
+    "compile": (75, 100, 30248),
+}
+
+
 def update_ytdlp_now():
-    """Settings button: check the configured channel right away and report."""
+    """Settings button: show what runs and what the channel offers; update on request.
+
+    Three of Kodi's own dialogs in a row: the two versions (with "Update" when
+    there is something newer), the progress through every step -- download,
+    validation against Kodi's Python, the one-time compile -- and the outcome.
+    When it says ready, the next playback already runs the new version at full
+    speed. Cancel stops before anything is replaced; cancelled during the
+    compile, the new version is in place and the service finishes compiling it
+    at the next start.
+    """
+    string = ADDON.getLocalizedString
     channel = ytdlp_loader.SETTING_CHANNELS[ADDON.getSettingInt("ytdlp_channel")]
-    notify = xbmcgui.Dialog().notification
-    notify(ADDON_NAME, ADDON.getLocalizedString(30174), xbmcgui.NOTIFICATION_INFO, 3000)
-    result = ytdlp_loader.update(paths.ytdlp_directory(), channel)
-    log("manual yt-dlp update on {}: {}".format(channel, result))
+    store = paths.ytdlp_directory()
+    dialog = xbmcgui.Dialog()
+
+    busy = xbmcgui.DialogProgress()
+    busy.create(ADDON_NAME, string(30245).format(channel))
+    try:
+        ytdlp_loader.ensure_patched(store)  # a copy an older version left unpatched
+        found = ytdlp_loader.check(store, channel, paths.bundled_ytdlp())
+    except Exception as error:  # noqa: BLE001 - network trouble is an answer here, not a crash
+        busy.close()
+        log("manual yt-dlp check on {} failed: {}".format(channel, error), xbmc.LOGWARNING)
+        dialog.ok(ADDON_NAME, string(30173).format(short_error(error)))
+        return
+    busy.close()
+
+    source = string(30177 if found["source"] == "downloaded" else 30178)
+    versions = "{}: [B]{}[/B] ({})[CR]{}: [B]{}[/B]".format(
+        string(30175), found["version"] or "?", source, string(30252).format(channel), found["latest"])
+    log("manual yt-dlp check on {}: in use {} ({}), latest {}, update {}".format(
+        channel, found["version"], found["source"], found["latest"],
+        "available" if found["available"] else "not needed"))
+    if not found["available"]:
+        dialog.ok(ADDON_NAME, "{}[CR][CR]{}".format(versions, found["reason"] or string(30253)))
+        return
+    if not dialog.yesno(ADDON_NAME, "{}[CR][CR]{}".format(versions, string(30254)),
+                        nolabel=string(30255), yeslabel=string(30256)):
+        return
+
+    progress_dialog = xbmcgui.DialogProgress()
+    progress_dialog.create(ADDON_NAME, string(30245).format(channel))
+
+    def progress(stage, fraction):
+        low, high, message = UPDATE_STAGES[stage]
+        progress_dialog.update(int(low + (high - low) * fraction),
+                               string(message).format(found["latest"] if stage == "download" else channel))
+
+    ready = False
+    try:
+        result = ytdlp_loader.update(store, channel, progress=progress, should_stop=progress_dialog.iscanceled)
+        log("manual yt-dlp update on {}: {}".format(channel, result))
+        if result.status in (ytdlp_loader.UPDATED, ytdlp_loader.UP_TO_DATE):
+            path, _ = ytdlp_loader.current(store)
+            if path and ytdlp_loader.is_patched(path):
+                ready = ytdlp_loader.build_compiled(
+                    path, ytdlp_loader.compiled_dir(store, os.path.basename(path)),
+                    should_stop=progress_dialog.iscanceled, progress=progress)
+    finally:
+        progress_dialog.close()
     ytdlp_info.refresh(ADDON)
-    if result.status == ytdlp_loader.UPDATED:
-        message, icon = ADDON.getLocalizedString(30171).format(result.version), xbmcgui.NOTIFICATION_INFO
-    elif result.status == ytdlp_loader.UP_TO_DATE:
-        message, icon = ADDON.getLocalizedString(30170).format(result.version), xbmcgui.NOTIFICATION_INFO
+
+    if result.status in (ytdlp_loader.UPDATED, ytdlp_loader.UP_TO_DATE):
+        outcome = string(30249 if ready else 30251).format(result.version)
+    elif result.status == ytdlp_loader.CANCELLED:
+        outcome = string(30250)
     elif result.status in (ytdlp_loader.REJECTED, ytdlp_loader.SKIPPED):
-        message, icon = ADDON.getLocalizedString(30172).format(result.reason), xbmcgui.NOTIFICATION_WARNING
+        outcome = string(30172).format(result.reason)
     else:
-        message, icon = ADDON.getLocalizedString(30173).format(result.reason), xbmcgui.NOTIFICATION_ERROR
-    notify(ADDON_NAME, message, icon, 6000)
+        outcome = string(30173).format(result.reason)
+    dialog.ok(ADDON_NAME, outcome)
 
 
 def show_settings():

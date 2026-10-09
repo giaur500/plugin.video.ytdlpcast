@@ -183,16 +183,16 @@ msgid "Update automatically"
 msgstr "Aktualizuj automatycznie"
 
 msgctxt "#30166"
-msgid "Checks for a new yt-dlp a minute after Kodi starts and then once a day, in the background. A new version is used only after it has been checked against Kodi's Python: one that needs a newer Python is rejected and the current one stays."
-msgstr "Sprawdza nową wersję yt-dlp minutę po starcie Kodi, a potem raz na dobę, w tle. Nowa wersja jest używana dopiero po sprawdzeniu zgodności z Pythonem Kodi: wersja wymagająca nowszego Pythona jest odrzucana i zostaje obecna."
+msgid "Checks for a new yt-dlp a minute after Kodi starts and then once a day, in the background, and compiles it once so playback starts fast. A new version is used only after it has been checked against Kodi's Python: one that needs a newer Python is rejected and the current one stays. Off: yt-dlp changes only when you choose Update under Check for updates now."
+msgstr "Sprawdza nowy yt-dlp minutę po starcie Kodi, potem raz na dobę, w tle, i kompiluje go jednorazowo, żeby odtwarzanie startowało szybko. Nowa wersja jest używana dopiero po sprawdzeniu zgodności z Pythonem Kodi: taka, która wymaga nowszego Pythona, jest odrzucana i zostaje obecna. Wyłączone: yt-dlp zmienia się tylko po wybraniu Aktualizuj w Sprawdź aktualizacje teraz."
 
 msgctxt "#30167"
 msgid "Check for updates now"
 msgstr "Sprawdź aktualizacje teraz"
 
 msgctxt "#30168"
-msgid "Checks the selected channel right away and shows the result."
-msgstr "Od razu sprawdza wybrany kanał i pokazuje wynik."
+msgid "Shows the version in use and the newest one on the selected channel. When there is a newer one, Update downloads it, checks it against Kodi's Python and compiles it, showing each step; when it says ready, the next playback uses it. Cancel leaves everything as it was."
+msgstr "Pokazuje używaną wersję i najnowszą na wybranym kanale. Gdy jest nowsza, Aktualizuj pobiera ją, sprawdza zgodność z Pythonem Kodi i kompiluje, pokazując każdy krok; gdy pojawi się informacja o gotowości, kolejne odtworzenie już jej używa. Anulowanie zostawia wszystko bez zmian."
 
 msgctxt "#30170"
 msgid "yt-dlp {} is up to date"
@@ -482,3 +482,51 @@ msgstr "Każde żądanie do interfejsu WWW: adres przeglądarki, metoda, ścież
 msgctxt "#30244"
 msgid "New web interface PIN: {}"
 msgstr "Nowy PIN interfejsu WWW: {}"
+
+msgctxt "#30245"
+msgid "Checking the {} channel…"
+msgstr "Sprawdzanie kanału {}…"
+
+msgctxt "#30246"
+msgid "Downloading yt-dlp {}…"
+msgstr "Pobieranie yt-dlp {}…"
+
+msgctxt "#30247"
+msgid "Checking it against Kodi's Python…"
+msgstr "Sprawdzanie zgodności z Pythonem Kodi…"
+
+msgctxt "#30248"
+msgid "Compiling it once, for fast starts…"
+msgstr "Jednorazowa kompilacja dla szybkiego startu…"
+
+msgctxt "#30249"
+msgid "yt-dlp {} is installed and ready. The next playback uses it."
+msgstr "yt-dlp {} jest zainstalowany i gotowy. Kolejne odtworzenie już go używa."
+
+msgctxt "#30250"
+msgid "Update cancelled; nothing was changed."
+msgstr "Aktualizacja przerwana; nic nie zmieniono."
+
+msgctxt "#30251"
+msgid "yt-dlp {} is installed; compiling it finishes at the next Kodi start."
+msgstr "yt-dlp {} jest zainstalowany; kompilacja dokończy się przy następnym starcie Kodi."
+
+msgctxt "#30252"
+msgid "Newest on the {} channel"
+msgstr "Najnowsza na kanale {}"
+
+msgctxt "#30253"
+msgid "You have the newest version."
+msgstr "Masz najnowszą wersję."
+
+msgctxt "#30254"
+msgid "A newer version is available."
+msgstr "Dostępna jest nowsza wersja."
+
+msgctxt "#30255"
+msgid "Close"
+msgstr "Zamknij"
+
+msgctxt "#30256"
+msgid "Update"
+msgstr "Aktualizuj"

@@ -28,20 +28,31 @@ Two properties matter more than freshness:
   '\\N{FULLWIDTH COMMA}' hit that on every playback after the first. Fixed in
   CPython 3.12; until Kodi ships it, no \\N{} may ever be decoded here.
 
+* Compiled once. A plugin call is a fresh interpreter: importing from the
+  archive compiles every yt-dlp module it needs (about a hundred) from source,
+  on every playback -- seconds on an ARM box. So the service extracts each
+  archive it will use into a directory and byte-compiles it once, in the
+  background; the plugin imports the .pyc files from there and only falls back
+  to the archive until that directory is ready.
+
 No xbmc import here: scripts/test-loader.py exercises all of it on a desktop.
 """
 
 import ast
 import hashlib
+import importlib.util
 import io
 import json
 import os
+import py_compile
 import re
+import shutil
 import sys
 import tempfile
 import time
 import tokenize
 import unicodedata
+import urllib.parse
 import urllib.request
 import zipfile
 
@@ -62,6 +73,21 @@ KEEP = 2  # the current file and the one before it
 
 UP_TO_DATE, UPDATED, SKIPPED, REJECTED, FAILED = (
     "up_to_date", "updated", "skipped", "rejected", "failed")
+CANCELLED = "cancelled"
+
+
+class Cancelled(Exception):
+    """The user stopped a check they started from the settings."""
+
+
+def _report(progress, stage, fraction):
+    if progress is not None:
+        progress(stage, max(0.0, min(1.0, fraction)))
+
+
+def _check(should_stop):
+    if should_stop is not None and should_stop():
+        raise Cancelled()
 
 # Written as the ZIP comment of every archive whose \\N{} escapes were rewritten.
 PATCH_MARK = b"ytdlpcast:named-escapes-1"
@@ -106,7 +132,7 @@ def inspect(zip_path):
     return version.group(1), (int(minimum.group(1)), int(minimum.group(2)))
 
 
-def compatible(zip_path, python=None):
+def compatible(zip_path, python=None, progress=None, should_stop=None):
     """(ok, reason): can this interpreter load the archive?
 
     Nothing from the archive is executed. The declared minimum is compared
@@ -123,9 +149,11 @@ def compatible(zip_path, python=None):
     started = time.monotonic()
     parsed = 0
     with zipfile.ZipFile(zip_path) as archive:
-        for name in archive.namelist():
-            if not name.endswith(".py"):
-                continue
+        sources = [name for name in archive.namelist() if name.endswith(".py")]
+        for index, name in enumerate(sources):
+            _check(should_stop)
+            if index % 20 == 0:
+                _report(progress, "validate", index / len(sources))
             try:
                 ast.parse(archive.read(name), filename=name, feature_version=python)
             except SyntaxError as error:
@@ -281,8 +309,9 @@ def current(store_dir):
 def activate(store_dir, bundled_path):
     """Put the best available yt-dlp first on sys.path; return (version, source).
 
-    source is "downloaded" or "bundled". Importing is left to the caller, which
-    can fall back to activate_bundled() if the import itself fails.
+    source is "downloaded" or "bundled". Each comes from its compiled directory
+    when the service has prepared one, else from its archive. Importing is left
+    to the caller, which can fall back to activate_bundled() if it fails.
     """
     path, version = current(store_dir) if store_dir else (None, None)
     if path and not is_patched(path):
@@ -291,19 +320,141 @@ def activate(store_dir, bundled_path):
         log.warning("the downloaded yt-dlp %s is not patched yet; using the bundled copy", version)
         path = None
     if path:
-        _prepend(path)
-        log.info("using the downloaded %s (%s)", version, path)
+        _use(path, compiled_dir(store_dir, os.path.basename(path)), "downloaded", version)
         return version, "downloaded"
-    return activate_bundled(bundled_path)
+    return activate_bundled(bundled_path, store_dir)
 
 
-def activate_bundled(bundled_path):
+def activate_bundled(bundled_path, store_dir=None):
     version, _ = inspect(bundled_path)
     if not is_patched(bundled_path):
         log.error("BUG: the bundled yt-dlp %s was not patched at build time", version)
-    _prepend(bundled_path)
-    log.info("using the bundled %s (%s)", version, bundled_path)
+    _use(bundled_path, bundled_dir(store_dir, version) if store_dir else None, "bundled", version)
     return version, "bundled"
+
+
+def _use(archive, directory, source, version):
+    if directory and is_compiled(directory):
+        _prepend(directory)
+        log.info("using the %s %s, compiled (%s)", source, version, directory)
+    else:
+        _prepend(archive)
+        log.info("using the %s %s from its archive, compiling on import (%s)", source, version, archive)
+
+
+# ---------------------------------------------------------------------------
+# Compiled once: an extracted, byte-compiled copy of each archive in use
+# ---------------------------------------------------------------------------
+
+READY = ".ytdlpcast-compiled"
+
+
+def compiled_dir(store_dir, archive_name):
+    """The directory an archive is extracted to: its name without ".zip"."""
+    return os.path.join(store_dir, archive_name[:-len(".zip")])
+
+
+def bundled_dir(store_dir, version):
+    return os.path.join(store_dir, "bundled-" + re.sub(r"[^A-Za-z0-9._-]", "_", version))
+
+
+def is_compiled(directory):
+    """Ready for this interpreter: extracted, and compiled by a Python with the same bytecode tag."""
+    try:
+        with open(os.path.join(directory, READY), encoding="utf-8") as handle:
+            return handle.read().strip() == sys.implementation.cache_tag
+    except OSError:
+        return False
+
+
+def build_compiled(archive, directory, should_stop=None, progress=None):
+    """Extract archive into directory and byte-compile it; True when it is ready.
+
+    Safe to interrupt (should_stop() is checked between files) and to resume:
+    files already compiled are skipped. The directory appears in one rename, and
+    READY is written last, so a plugin call never picks up half of it.
+    """
+    if is_compiled(directory):
+        return True
+    started = time.monotonic()
+    if not os.path.isdir(directory):
+        staging = tempfile.mkdtemp(dir=os.path.dirname(directory), prefix=".extract-")
+        try:
+            with zipfile.ZipFile(archive) as source:
+                for name in source.namelist():
+                    if name.startswith("/") or ".." in name.split("/"):
+                        raise ValueError("unsafe path in {}: {}".format(os.path.basename(archive), name))
+                source.extractall(staging)
+            os.rename(staging, directory)
+        except OSError:
+            shutil.rmtree(staging, ignore_errors=True)
+            if not os.path.isdir(directory):  # another builder may have won the race
+                raise
+        except BaseException:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
+        log.info("extracted %s in %.1f s", os.path.basename(archive), time.monotonic() - started)
+    compiled = skipped = 0
+    sources = [os.path.join(root, name) for root, _, files in os.walk(directory)
+               for name in files if name.endswith(".py")]
+    for index, source_path in enumerate(sources):
+        if index % 20 == 0:
+            _report(progress, "compile", index / len(sources))
+        if should_stop and should_stop():
+            log.info("compiling %s interrupted after %d files; it resumes next time",
+                     os.path.basename(directory), compiled)
+            return False
+        cache = importlib.util.cache_from_source(source_path)
+        if os.path.exists(cache) and os.path.getmtime(cache) >= os.path.getmtime(source_path):
+            skipped += 1
+            continue
+        try:
+            py_compile.compile(source_path, cfile=cache, doraise=True)
+            compiled += 1
+        except py_compile.PyCompileError as error:
+            log.warning("%s does not compile: %s", source_path, error.msg)
+    with open(os.path.join(directory, READY), "w", encoding="utf-8") as handle:
+        handle.write(sys.implementation.cache_tag)
+    log.info("compiled %d files of %s in %.1f s (%d already done)", compiled, os.path.basename(directory),
+             time.monotonic() - started, skipped)
+    return True
+
+
+def prepare(store_dir, bundled_path, should_stop=None, cleanup=False):
+    """Build the compiled copies the plugin may use; [(version, seconds)] of those built now.
+
+    The downloaded copy in use and the bundled one (the fallback). cleanup
+    removes compiled copies of anything else -- done at service start, when no
+    playback can still be importing from an old one.
+    """
+    os.makedirs(store_dir, exist_ok=True)
+    wanted, built = set(), []
+    jobs = []
+    path, version = current(store_dir)
+    if path and is_patched(path):
+        jobs.append((path, compiled_dir(store_dir, os.path.basename(path)), version))
+    try:
+        bundled_version, _ = inspect(bundled_path)
+        if is_patched(bundled_path):
+            jobs.append((bundled_path, bundled_dir(store_dir, bundled_version), bundled_version))
+    except (OSError, KeyError, ValueError, zipfile.BadZipFile):
+        pass
+    for archive, directory, label in jobs:
+        wanted.add(os.path.basename(directory))
+        if is_compiled(directory):
+            continue
+        started = time.monotonic()
+        if not build_compiled(archive, directory, should_stop):
+            break
+        built.append((label, time.monotonic() - started))
+    if cleanup:
+        for name in os.listdir(store_dir):
+            full = os.path.join(store_dir, name)
+            if (os.path.isdir(full) and name not in wanted
+                    and name.startswith(("yt-dlp-", "bundled-", ".extract-"))):
+                shutil.rmtree(full, ignore_errors=True)
+                log.info("removed the compiled copy %s", name)
+    return built
 
 
 def mark_broken(store_dir, broken):
@@ -354,12 +505,23 @@ def _url(channel, asset):
     return "https://github.com/{}/releases/latest/download/{}".format(CHANNELS[channel], asset)
 
 
-def _fetch(url, timeout):
+def _fetch(url, timeout, progress=None, should_stop=None):
     request = urllib.request.Request(url, headers={"User-Agent": "plugin.video.ytdlpcast"})
     started = time.monotonic()
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = response.read()
+            total = int(response.headers.get("Content-Length") or 0)
+            chunks, done = [], 0
+            while True:
+                _check(should_stop)
+                chunk = response.read(65536)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                done += len(chunk)
+                if total:
+                    _report(progress, "download", done / total)
+            data = b"".join(chunks)
             diag.log_request("GET", url, started, response.status, len(data))
             return data
     except Exception as error:
@@ -376,7 +538,43 @@ def published_sha256(channel, timeout=20):
     raise ValueError("{} has no line for {}".format(SUMS, ASSET))
 
 
-def update(store_dir, channel, python=None, timeout=60):
+def latest_version(channel, timeout=20):
+    """The tag of the channel's latest release -- yt-dlp's version string.
+
+    Read from where github.com/<repo>/releases/latest redirects (.../tag/<tag>):
+    no API call, so no API rate limit.
+    """
+    url = "https://github.com/{}/releases/latest".format(CHANNELS[channel])
+    request = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "plugin.video.ytdlpcast"})
+    started = time.monotonic()
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        final = response.geturl()
+        diag.log_request("HEAD", url, started, response.status, 0, note=" -> " + final)
+    tag = final.rstrip("/").rsplit("/tag/", 1)[-1] if "/tag/" in final else None
+    if not tag:
+        raise ValueError("no release tag in {}".format(final))
+    return urllib.parse.unquote(tag)
+
+
+def check(store_dir, channel, bundled_path, timeout=20):
+    """What runs and what the channel offers, without changing anything.
+
+    {"version", "source", "latest", "available", "reason"}: available is False
+    when the copy in use is the channel's latest, or when that release was
+    rejected before (reason says why).
+    """
+    info = describe(store_dir, bundled_path)
+    latest = latest_version(channel, timeout)
+    sha = published_sha256(channel, timeout)
+    state = _read_state(store_dir) if os.path.isdir(store_dir) else {}
+    in_use = info["source"] == "downloaded" and state.get("sha256") == sha
+    rejected = sha in state.get("rejected", [])
+    return {"version": info.get("version"), "source": info["source"], "latest": latest,
+            "available": not in_use and not rejected,
+            "reason": "release {} was rejected before".format(latest) if rejected and not in_use else None}
+
+
+def update(store_dir, channel, python=None, timeout=60, progress=None, should_stop=None):
     """Bring store_dir up to date with the channel. Never removes the file in use.
 
     Whatever the outcome, it is kept in the state as last_result -- the
@@ -384,7 +582,10 @@ def update(store_dir, channel, python=None, timeout=60):
     """
     started = time.monotonic()
     log.info("checking %s: %s", channel, _url(channel, ASSET) if channel in CHANNELS else "?")
-    result = _update(store_dir, channel, python, timeout)
+    try:
+        result = _update(store_dir, channel, python, timeout, progress, should_stop)
+    except Cancelled:
+        result = Result(CANCELLED, reason="cancelled")
     if os.path.isdir(store_dir):
         state = _read_state(store_dir)
         state["last_result"] = {"status": result.status, "version": result.version,
@@ -397,15 +598,18 @@ def update(store_dir, channel, python=None, timeout=60):
     return result
 
 
-def _update(store_dir, channel, python, timeout):
+def _update(store_dir, channel, python, timeout, progress=None, should_stop=None):
     if channel not in CHANNELS:
         return Result(FAILED, reason="unknown channel {!r}".format(channel))
     os.makedirs(store_dir, exist_ok=True)
     state = _read_state(store_dir)
     state["checked_at"] = int(time.time())
 
+    _report(progress, "check", 0)
     try:
         sha = published_sha256(channel)
+    except Cancelled:
+        raise
     except Exception as error:  # noqa: BLE001 - network trouble is an outcome, not a crash
         _write_state(store_dir, state)
         return Result(FAILED, reason="checksums unavailable: {}".format(error))
@@ -426,7 +630,7 @@ def _update(store_dir, channel, python, timeout):
     os.close(fd)
     try:
         fetched = time.monotonic()
-        data = _fetch(_url(channel, ASSET), timeout)
+        data = _fetch(_url(channel, ASSET), timeout, progress, should_stop)
         log.info("downloaded %d bytes in %.1f s", len(data), time.monotonic() - fetched)
         if hashlib.sha256(data).hexdigest() != sha:
             return Result(FAILED, reason="download does not match {}".format(SUMS))
@@ -436,7 +640,7 @@ def _update(store_dir, channel, python, timeout):
             return _reject(store_dir, state, sha, "not a ZIP archive")
         # Before anything parses it: validation compiles every source file too.
         patch_archive(raw, tmp)
-        ok, reason = compatible(tmp, python)
+        ok, reason = compatible(tmp, python, progress, should_stop)
         if not ok:
             return _reject(store_dir, state, sha, reason)
         version, _ = inspect(tmp)
@@ -449,6 +653,8 @@ def _update(store_dir, channel, python, timeout):
         log.info("installed as %s", name)
         _cleanup(store_dir, keep_first=name)
         return Result(UPDATED, version=version)
+    except Cancelled:
+        raise
     except Exception as error:  # noqa: BLE001 - the file in use stays untouched
         return Result(FAILED, reason=str(error))
     finally:

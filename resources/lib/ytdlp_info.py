@@ -46,6 +46,8 @@ def texts(addon):
             outcome = string(30171).format(last.get("version"))
         elif status in (ytdlp_loader.REJECTED, ytdlp_loader.SKIPPED):
             outcome = string(30172).format(last.get("reason"))
+        elif status == ytdlp_loader.CANCELLED:
+            outcome = string(30250)
         else:
             outcome = string(30173).format(last.get("reason"))
         check = "{} · {}".format(_date(last.get("at") or 0), outcome)

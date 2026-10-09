@@ -79,6 +79,9 @@ class Service(xbmc.Monitor):
             ADDON_ID, xbmcaddon.Addon().getAddonInfo("version"), xbmc.getInfoLabel("System.BuildVersion"),
             platform.python_version(), sys.platform, described.get("version"), described.get("source")))
         ytdlp_info.refresh()
+        self._compile_lock = threading.Lock()
+        self._stopping = threading.Event()
+        self.compile_ytdlp(cleanup=True)
         self.root = paths.manifest_directory()
         # Rewritten manifests, kept originals and downloaded subtitles are
         # per-playback scratch; anything left from a previous run is stale.
@@ -137,6 +140,28 @@ class Service(xbmc.Monitor):
             self.web.reload_auth(web)
         self.web_settings = web
 
+    def compile_ytdlp(self, cleanup=False):
+        """Extract and byte-compile the yt-dlp copies in use, once, in the background.
+
+        A plugin call imports from the compiled copy when it is ready, from the
+        archive (compiling on every call) until then. Interrupted at shutdown,
+        it resumes where it stopped at the next start.
+        """
+        def work():
+            with self._compile_lock:
+                try:
+                    built = ytdlp_loader.prepare(
+                        paths.ytdlp_directory(), paths.bundled_ytdlp(),
+                        should_stop=lambda: self._stopping.is_set() or self.abortRequested(), cleanup=cleanup)
+                except Exception as error:  # noqa: BLE001 - the archive keeps working without it
+                    log("compiling yt-dlp failed ({}: {}); it is loaded from its archive instead".format(
+                        type(error).__name__, error), xbmc.LOGWARNING)
+                    return
+            for version, took in built:
+                log("yt-dlp {} compiled once in {:.0f} s; playback now loads it precompiled".format(version, took))
+
+        threading.Thread(target=work, name="ytdlpcast-compile", daemon=True).start()
+
     def check_ytdlp(self):
         addon = xbmcaddon.Addon()  # fresh: settings may have changed since start
         if not addon.getSettingBool("ytdlp_auto_update"):
@@ -160,6 +185,8 @@ class Service(xbmc.Monitor):
             log("yt-dlp update on {} failed: {}".format(channel, result.reason), xbmc.LOGWARNING)
         else:
             log("yt-dlp update on {} took {:.1f}s: {}".format(channel, took, result))
+        if result.status == ytdlp_loader.UPDATED:
+            self.compile_ytdlp()
 
     def run(self):
         wait = FIRST_CHECK_DELAY
@@ -168,6 +195,7 @@ class Service(xbmc.Monitor):
             wait = CHECK_INTERVAL
             service_log.info("next yt-dlp check in %d h", CHECK_INTERVAL // 3600)
         stopping = time.monotonic()
+        self._stopping.set()  # an unfinished compile stops between files and resumes next start
         cast_kodi.stop(self.cast)
         web_kodi.stop(self.web)
         playback_diag.stop(self.player_diag)

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="plugin.video.ytdlpcast"
        name="yt-dlp Cast"
-       version="2.2.1"
+       version="2.3.0"
        provider-name="michal">
 
     <requires>
@@ -20,7 +20,11 @@
         <summary lang="pl_PL">Przesyłaj YouTube z telefonu do Kodi, odtwarzane przez yt-dlp</summary>
         <description lang="en_GB">Kodi shows up as a TV in the YouTube app: pick it from the cast menu, or link it once with a TV code. Every video is resolved by yt-dlp, which the add-on keeps current by itself, and played by InputStream Adaptive from YouTube's HLS manifest -- streamed, with seeking and quality switching, nothing downloaded first. No other add-on is needed for casting. An optional web interface plays any link yt-dlp supports -- YouTube, Dailymotion, Facebook, archive.org and many more, whole playlists as a queue -- shows what is playing with a seek bar, and the add-on's log.</description>
         <description lang="pl_PL">Kodi pojawia się jako telewizor w aplikacji YouTube: wybierz go w menu przesyłania albo połącz raz kodem TV. Każdy film rozwiązuje yt-dlp, który dodatek sam aktualizuje, a odtwarza InputStream Adaptive z manifestu HLS YouTube -- strumieniowo, z przewijaniem i zmianą jakości, bez wcześniejszego pobierania. Do przesyłania nie jest potrzebny żaden inny dodatek. Opcjonalny interfejs WWW odtwarza dowolny link obsługiwany przez yt-dlp -- YouTube, Dailymotion, Facebook, archive.org i wiele innych, całe playlisty jako kolejkę -- pokazuje, co gra, z suwakiem przewijania, oraz log wtyczki.</description>
-        <news>v2.2.1
+        <news>v2.3.0
+- yt-dlp is compiled once per version, in the background; playback no longer compiles it every time (much faster starts on ARM boxes)
+- Check for updates now shows the version in use and the newest one, offers Update and shows the progress until the new version is ready
+- With automatic updates switched off, yt-dlp changes only through Check for updates now
+v2.2.1
 - Fixed: Kodi crashed on the second playback. Kodi 21's Python (3.11) decodes \N{} escapes through a process-wide pointer that a finished plugin call leaves dangling; yt-dlp's sources are now rewritten without \N{} before anything compiles them
 v2.2.0
 - Web interface (off by default, optional PIN): play or queue any yt-dlp link, seek, pause, stop, read the log
