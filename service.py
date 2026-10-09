@@ -24,21 +24,16 @@ import time
 import xbmc
 import xbmcaddon
 
-from resources.lib import (cast_kodi, diag, kodilog, manifest_server, paths, playback_diag, web_kodi,
+from resources.lib import (cast_kodi, diag, kodilog, kodiutil, manifest_server, paths, playback_diag, web_kodi,
                            ytdlp_info, ytdlp_loader)
-
-ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
+from resources.lib.kodilog import log
+from resources.lib.kodiutil import ADDON_ID
 
 # Give Kodi time to finish starting before the first network request.
 FIRST_CHECK_DELAY = 60
 CHECK_INTERVAL = 24 * 60 * 60
 
 service_log = diag.logger("service")
-
-
-def log(message, level=xbmc.LOGINFO):
-    """The lines logged whatever the Diagnostics switches say: summaries, warnings, errors."""
-    xbmc.log("[{}] {}".format(ADDON_ID, message), level)
 
 
 def configured_port():
@@ -75,9 +70,15 @@ class Service(xbmc.Monitor):
             log("could not patch the downloaded yt-dlp ({}: {})".format(type(error).__name__, error),
                 xbmc.LOGERROR)
         described = ytdlp_loader.describe(paths.ytdlp_directory(), paths.bundled_ytdlp())
-        log("service started: {} {}, Kodi {}, Python {}, {}, yt-dlp {} ({})".format(
+        isa_version, isa_enabled = kodiutil.inputstream_adaptive()
+        log("service started: {} {}, Kodi {}, Python {}, {}, InputStream Adaptive {}, yt-dlp {} ({})".format(
             ADDON_ID, xbmcaddon.Addon().getAddonInfo("version"), xbmc.getInfoLabel("System.BuildVersion"),
-            platform.python_version(), sys.platform, described.get("version"), described.get("source")))
+            platform.python_version(), sys.platform,
+            (isa_version or "?") + ("" if isa_enabled else " disabled"),
+            described.get("version"), described.get("source")))
+        if not isa_enabled:
+            log("InputStream Adaptive is disabled: Kodi will play manifests itself, in the lowest quality",
+                xbmc.LOGWARNING)
         ytdlp_info.refresh()
         self._compile_lock = threading.Lock()
         self._stopping = threading.Event()
@@ -86,7 +87,7 @@ class Service(xbmc.Monitor):
         # Rewritten manifests, kept originals and downloaded subtitles are
         # per-playback scratch; anything left from a previous run is stale.
         removed = 0
-        for pattern in ("*.m3u8", "*.srt", "*.original.txt", os.path.join("cache", "*.json")):
+        for pattern in ("*.m3u8", "*.srt", "*.vtt", "*.original.txt", os.path.join("cache", "*.json")):
             for stale in glob.glob(os.path.join(self.root, pattern)):
                 try:
                     os.remove(stale)

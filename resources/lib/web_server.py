@@ -21,9 +21,9 @@ import re
 import threading
 import time
 import urllib.parse
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 
-from . import diag
+from . import diag, httpserve
 
 log = diag.logger("web")
 
@@ -84,6 +84,11 @@ class LogTail:
         return {"lines": kept, "offset": start + len(data), "reset": reset}
 
 
+def _same(given, expected):
+    """Constant-time comparison that also takes non-ASCII input (str would raise TypeError)."""
+    return hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8"))
+
+
 class Auth:
     """The optional PIN. A browser that entered it gets a cookie derived from a
     secret; a new PIN comes with a new secret, which signs every browser out."""
@@ -106,7 +111,7 @@ class Auth:
             return True
         for part in (cookie_header or "").split(";"):
             name, _, value = part.strip().partition("=")
-            if name == COOKIE and hmac.compare_digest(value, self.session()):
+            if name == COOKIE and _same(value, self.session()):
                 return True
         return False
 
@@ -119,7 +124,7 @@ class Auth:
             count, until = self._failures.get(address, (0, 0))
             if until > now:
                 return False, int(until - now) + 1
-            if self.required and hmac.compare_digest(str(pin or ""), self.pin):
+            if _same(str(pin or ""), self.pin):
                 self._failures.pop(address, None)
                 return True, 0
             count += 1
@@ -164,10 +169,11 @@ class _Handler(BaseHTTPRequestHandler):
         return origin is None or origin == "http://" + (self.headers.get("Host") or "")
 
     def _json_body(self):
-        if not (self.headers.get("Content-Type") or "").startswith("application/json"):
-            return None
-        length = int(self.headers.get("Content-Length") or 0)
-        if length > MAX_BODY:
+        """The request's JSON object, or None: not JSON, too large, malformed."""
+        length = httpserve.content_length(self.headers)
+        if (length is None or length > MAX_BODY
+                or not (self.headers.get("Content-Type") or "").startswith("application/json")):
+            self.close_connection = True  # the unread body must not be parsed as the next request
             return None
         try:
             body = json.loads(self.rfile.read(length) or b"{}")
@@ -243,41 +249,14 @@ class _Handler(BaseHTTPRequestHandler):
         return self._send(404, {"error": "not found"})
 
 
-class WebServer:
-    """Owns the listening socket and its thread; auth can be swapped live."""
+class WebServer(httpserve.ServerThread):
+    """The page and its API on the network; the PIN can be swapped while serving."""
 
     def __init__(self, backend, root, log_path, port, host="0.0.0.0", auth=None):
-        self.backend = backend
-        self.root = root
-        self.log_path = log_path
-        self.port = port
-        self.host = host
         self.auth = auth or Auth()
-        self._httpd = None
-        self._thread = None
-
-    def start(self):
-        """Bind and serve in a daemon thread. Raises OSError if the port is taken."""
-        httpd = ThreadingHTTPServer((self.host, self.port), _Handler)
-        httpd.daemon_threads = True
-        httpd.backend = self.backend
-        httpd.root = self.root
-        httpd.log_tail = LogTail(self.log_path)
-        httpd.auth = self.auth
-        self._httpd = httpd
-        self.port = httpd.server_address[1]
-        self._thread = threading.Thread(target=httpd.serve_forever, name="ytdlpcast-web", daemon=True)
-        self._thread.start()
+        super().__init__(_Handler, host, port, "ytdlpcast-web", backend=backend, root=root,
+                         log_tail=LogTail(log_path), auth=self.auth)
 
     def set_auth(self, auth):
         self.auth = auth
-        if self._httpd is not None:
-            self._httpd.auth = auth
-
-    def stop(self):
-        if self._httpd is None:
-            return
-        self._httpd.shutdown()
-        self._httpd.server_close()
-        self._thread.join(timeout=5)
-        self._httpd = self._thread = None
+        self.set(auth=auth)

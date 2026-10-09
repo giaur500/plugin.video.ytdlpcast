@@ -78,11 +78,13 @@ function render(status) {
   $("title").textContent = active ? status.title : "";
   const site = $("site");
   site.textContent = "";
-  if (active && (status.site || status.source)) {
-    site.append((status.site || "") + (status.source ? " · " : ""));
-    if (status.source) {
+  // The source is whatever link the plugin was called with: only a web one becomes a link.
+  const source = /^https?:\/\//i.test(status.source || "") ? status.source : null;
+  if (active && (status.site || source)) {
+    site.append((status.site || "") + (source ? " · " : ""));
+    if (source) {
       const link = document.createElement("a");
-      link.href = status.source;
+      link.href = source;
       link.target = "_blank";
       link.rel = "noreferrer noopener";
       link.textContent = t("source");

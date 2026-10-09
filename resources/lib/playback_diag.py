@@ -21,13 +21,10 @@ import threading
 import time
 
 import xbmc
-import xbmcaddon
-import xbmcgui
 
-from . import diag
+from . import diag, kodiutil
+from .kodiutil import ADDON_ID, HOME
 
-ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
-HOME = xbmcgui.Window(10000)
 PROP_PLAYING = ADDON_ID + ".playing"
 # What the plugin last handed Kodi, kept (not consumed) for the web interface.
 PROP_SOURCE = ADDON_ID + ".playing.source"
@@ -68,35 +65,6 @@ def _take_mark():
 
 def _process(key):
     return xbmc.getInfoLabel("Player.Process({})".format(key))
-
-
-class _Player(xbmc.Player):
-    """Only queues what happened."""
-
-    def __init__(self, events):
-        super().__init__()
-        self.events = events
-
-    def onAVStarted(self):
-        self.events.put("started")
-
-    def onPlayBackPaused(self):
-        self.events.put("paused")
-
-    def onPlayBackResumed(self):
-        self.events.put("resumed")
-
-    def onPlayBackSeek(self, time, seekOffset):  # noqa: A002, N803 - Kodi's signature
-        self.events.put("seek")
-
-    def onPlayBackStopped(self):
-        self.events.put("stopped")
-
-    def onPlayBackEnded(self):
-        self.events.put("ended")
-
-    def onPlayBackError(self):
-        self.events.put("error")
 
 
 class _Session:
@@ -216,7 +184,7 @@ class PlaybackDiagnostics(threading.Thread):
 
     def _run(self):
         monitor = xbmc.Monitor()
-        player = _Player(self.events)  # created here: its callbacks arrive here
+        player = kodiutil.EventPlayer(self.events)  # created here: its callbacks arrive here
         session = None
         last_poll = 0.0
         log.info("watching Kodi's player")
@@ -225,7 +193,7 @@ class PlaybackDiagnostics(threading.Thread):
                 break
             while True:
                 try:
-                    event = self.events.get_nowait()
+                    event = self.events.get_nowait()[0]
                 except queue.Empty:
                     break
                 if event == "started":
@@ -242,7 +210,7 @@ class PlaybackDiagnostics(threading.Thread):
                 elif event in ("stopped", "ended", "error"):
                     session.finish({"stopped": "stopped", "ended": "ended", "error": "playback error in"}[event])
                     session = None
-                elif event == "seek":
+                elif event == "seeked":
                     session.seeked()
                 elif event == "paused":
                     session.paused()

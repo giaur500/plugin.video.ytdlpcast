@@ -11,7 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import diag, mp4index
+from . import diag
 
 manifest_log = diag.logger("manifest")
 
@@ -27,6 +27,12 @@ PLAYLIST_LIMIT = 200
 
 # Cookie attributes in yt-dlp's per-format "cookies" string -- not cookies.
 _COOKIE_ATTRIBUTES = {"domain", "path", "expires", "max-age", "secure", "httponly", "samesite"}
+
+
+def short_error(error):
+    """yt-dlp's message in one line: what to show a user ("…requires login")."""
+    text = (str(error).strip().splitlines() or [type(error).__name__])[0]
+    return re.sub(r"^ERROR:\s*", "", text)[:200]
 
 
 def watch_url(video_id):
@@ -182,21 +188,21 @@ def headers_for(info, fmt):
     return headers
 
 
+def _usable_headers(headers):
+    """headers without empty values and without yt-dlp's own (_SKIP_HEADERS)."""
+    return {key: value for key, value in (headers or {}).items()
+            if value and not key.lower().startswith(_SKIP_HEADERS)}
+
+
 def kodi_url(url, headers):
     """A URL with headers in Kodi's own "url|Name=value&..." form, for its player."""
-    usable = {key: value for key, value in (headers or {}).items()
-              if value and not key.lower().startswith(_SKIP_HEADERS)}
+    usable = _usable_headers(headers)
     return url + ("|" + urllib.parse.urlencode(usable) if usable else "")
 
 
 def encode_headers(headers):
     """Headers in the "a=b&c=d" shape InputStream Adaptive expects."""
-    usable = {
-        key: value
-        for key, value in (headers or {}).items()
-        if value and not key.lower().startswith(_SKIP_HEADERS)
-    }
-    return urllib.parse.urlencode(usable)
+    return urllib.parse.urlencode(_usable_headers(headers))
 
 
 # ---------------------------------------------------------------------------
@@ -315,11 +321,6 @@ def _codecs(attrs):
 
 def _is_audio(entry):
     return entry["kind"] == "media" and entry["attrs"].get("TYPE") == "AUDIO"
-
-
-def _iso639_1(language):
-    """'en-US' -> 'en'. InputStream Adaptive only understands the two-letter form."""
-    return language.split("-")[0].lower() if language else None
 
 
 def _collapse_audio_groups(entries, wanted_tag):
@@ -448,21 +449,14 @@ def _ensure_default(entries):
     return entries, changed
 
 
-def _original_language(entries):
-    for entry in entries:
-        if _is_audio(entry) and "original" in entry["attrs"].get("NAME", ""):
-            return _iso639_1(entry["attrs"].get("LANGUAGE"))
-    return None
-
-
 def filter_manifest(text, max_height=0, video_codec=VIDEO_AUTO,
                     audio_codec=AUDIO_AS_PUBLISHED, drop_auto_dubbed=False,
                     quality=QUALITY_ADAPTIVE):
     """Apply the playback settings to a master playlist.
 
-    Returns (text, changed, original_language). When nothing had to change the
-    input text comes back untouched and changed is False, so the caller can
-    keep handing InputStream Adaptive the original URL.
+    Returns (text, changed). When nothing had to change the input text comes
+    back untouched and changed is False, so the caller can keep handing
+    InputStream Adaptive the original URL.
     """
     entries = _parse(text)
     changed = False
@@ -494,11 +488,11 @@ def filter_manifest(text, max_height=0, video_codec=VIDEO_AUTO,
     step("default audio track", _ensure_default(entries))
 
     if not changed:
-        return text, False, _original_language(entries)
+        return text, False
     rebuilt = "\n".join(line for entry in entries for line in entry["lines"])
     if text.endswith("\n"):
         rebuilt += "\n"
-    return rebuilt, True, _original_language(entries)
+    return rebuilt, True
 
 
 # ---------------------------------------------------------------------------
@@ -507,47 +501,59 @@ def filter_manifest(text, max_height=0, video_codec=VIDEO_AUTO,
 
 # Kodi reads both; srt without any surprises.
 _SUBTITLE_EXTENSIONS = ("srt", "vtt")
-
-
-def fetch_subtitle(url, headers=None, timeout=20):
-    """Bytes of one subtitle file."""
-    return fetch(url, headers, timeout)
+# YouTube still uses a few withdrawn ISO 639 codes; Kodi and the settings use the current ones.
+_LANGUAGE_ALIASES = {"iw": "he", "in": "id", "ji": "yi", "jw": "jv"}
 
 
 def _primary_language(code):
-    """'de-DE' -> 'de', 'es-419' -> 'es'.
+    """'de-DE' -> 'de', 'es-419' -> 'es', 'iw' -> 'he', None -> ''.
 
-    Kodi resolves the language from the file name, and a plain ISO 639-1 code
-    converts reliably; a regional suffix would be the last token and might not.
+    Kodi resolves the language from a subtitle's file name and InputStream
+    Adaptive from LANGUAGE; both take a plain ISO 639-1 code reliably, a
+    regional suffix not always.
     """
-    return code.split("-")[0].lower()
+    primary = (code or "").split("-")[0].lower()
+    return _LANGUAGE_ALIASES.get(primary, primary)
 
 
-def pick_subtitles(info):
-    """[(language, url)] for every subtitle the uploader provided.
+def _subtitle_file(tracks):
+    """(url, ext) of the first format Kodi reads well, or None."""
+    for extension in _SUBTITLE_EXTENSIONS:
+        track = next((t for t in tracks if t.get("ext") == extension and t.get("url")), None)
+        if track:
+            return track["url"], extension
+    return None
+
+
+def pick_subtitles(info, languages):
+    """[(language, url, ext)] to try in order until one downloads; each track once.
+
+    For every wanted language (ISO 639-1 codes, most wanted first) the track
+    the uploader provided in it -- the plain code before a regional one, "en"
+    before "en-GB" -- then the first track the video has, in yt-dlp's order,
+    whatever its language.
 
     Only info["subtitles"] is considered -- the author's own tracks. YouTube's
     automatic_captions are machine output, and the translated ones among them
     are unusable anyway: that endpoint demands browser TLS impersonation and
     answers HTTP 429 to everything else, including yt-dlp itself.
-
-    One entry per language; a regional variant does not get a second slot.
     """
-    uploaded = info.get("subtitles") or {}
-    chosen = []
-    seen = set()
-    for code in sorted(uploaded):
-        language = _primary_language(code)
-        if language in seen:
-            continue
-        for extension in _SUBTITLE_EXTENSIONS:
-            track = next((t for t in uploaded[code]
-                          if t.get("ext") == extension and t.get("url")), None)
-            if track:
-                chosen.append((language, track["url"]))
-                seen.add(language)
-                break
-    return chosen
+    usable = []  # (code, language, url, ext), in yt-dlp's order
+    for code, tracks in (info.get("subtitles") or {}).items():
+        found = _subtitle_file(tracks or ())
+        if found:
+            usable.append((code, _primary_language(code)) + found)
+    ordered = []
+    for wanted in languages:
+        matches = [track for track in usable if track[1] == _primary_language(wanted)]
+        ordered.extend(sorted(matches, key=lambda track: "-" in track[0])[:1])
+    ordered.extend(usable[:1])
+    candidates, seen = [], set()
+    for code, language, url, ext in ordered:
+        if code not in seen:
+            seen.add(code)
+            candidates.append((language, url, ext))
+    return candidates
 
 
 # ---------------------------------------------------------------------------
@@ -563,11 +569,11 @@ def pick_subtitles(info):
 AUDIO_ITAG_PREFIX = "140"  # m4a AAC-LC; "-0"/"-1" suffixes are per-language
 
 
-def pick_audio_fmp4(info, languages=None):
+def pick_audio_fmp4(info):
     """(url, headers, language) of the best fMP4 AAC audio, or (None, None, None).
 
-    Prefers a track whose language is the video's original; falls back to the
-    first m4a track. languages is an ordered preference list (ISO codes).
+    Prefers the track in the video's original language; falls back to the
+    first m4a track.
     """
     candidates = [
         fmt for fmt in info.get("formats") or ()
@@ -577,25 +583,15 @@ def pick_audio_fmp4(info, languages=None):
     ]
     if not candidates:
         return None, None, None
-
-    def language_of(fmt):
-        return (fmt.get("language") or "").split("-")[0].lower() or None
-
-    original = next((c for c in candidates if c.get("language_preference", 0) >= 0
-                     and _is_original(c)), None)
-    chosen = None
-    for wanted in languages or ():
-        chosen = next((c for c in candidates if language_of(c) == wanted), None)
-        if chosen:
-            break
-    chosen = chosen or original or candidates[0]
-    return chosen["url"], chosen.get("http_headers") or {}, language_of(chosen)
+    chosen = next((c for c in candidates if _is_original(c)), candidates[0])
+    return chosen["url"], chosen.get("http_headers") or {}, _primary_language(chosen.get("language")) or None
 
 
 def _is_original(fmt):
-    # yt-dlp marks the original-language track in the format note or name.
+    """yt-dlp ranks the original-language track above the others and names it in the format note."""
+    preference = fmt.get("language_preference") or 0
     note = "{} {}".format(fmt.get("format_note") or "", fmt.get("format_id") or "").lower()
-    return "original" in note or fmt.get("language_preference", 0) > 0
+    return preference > 0 or (preference == 0 and "original" in note)
 
 
 def build_fmp4_audio_playlist(audio_url, init_range, segments):

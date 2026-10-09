@@ -23,11 +23,9 @@ import xbmc
 import xbmcaddon
 import xbmcgui
 
-from . import cast_discovery, cast_lounge, cast_receiver, diag, kodilog, paths, request_state
+from . import cast_discovery, cast_lounge, cast_receiver, diag, kodilog, kodiutil, paths, request_state
 from .cast_protocol import STATUS_PAUSED, STATUS_PLAYING, STATUS_STOPPED
-
-ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
-HOME = xbmcgui.Window(10000)
+from .kodiutil import ADDON_ID, HOME
 
 # Shared between the service (which casts) and the plugin (which resolves and
 # shows the TV code dialog) -- separate interpreters, so window properties.
@@ -65,41 +63,12 @@ def notify(message, icon=xbmcgui.NOTIFICATION_INFO, time_ms=4000):
 
 
 def json_rpc(method, params=None):
-    reply = json.loads(xbmc.executeJSONRPC(json.dumps(
-        {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}})))
-    if "error" in reply:
-        log.warning("%s failed: %s", method, reply["error"])
+    """The result, or None when Kodi refused (logged): volume is best effort."""
+    try:
+        return kodiutil.json_rpc(method, params)
+    except RuntimeError as error:
+        log.warning("JSON-RPC %s", error)
         return None
-    return reply.get("result")
-
-
-class _Player(xbmc.Player):
-    """Only queues what happened; the controller decides what it means."""
-
-    def __init__(self, events):
-        super().__init__()
-        self.events = events
-
-    def onAVStarted(self):
-        self.events.put(("started",))
-
-    def onPlayBackPaused(self):
-        self.events.put(("paused",))
-
-    def onPlayBackResumed(self):
-        self.events.put(("resumed",))
-
-    def onPlayBackSeek(self, time, seekOffset):  # noqa: A002, N803 - Kodi's signature
-        self.events.put(("seeked",))
-
-    def onPlayBackStopped(self):
-        self.events.put(("stopped",))
-
-    def onPlayBackEnded(self):
-        self.events.put(("ended",))
-
-    def onPlayBackError(self):
-        self.events.put(("error",))
 
 
 class _Monitor(xbmc.Monitor):
@@ -216,11 +185,11 @@ class CastController(threading.Thread):
 
     def _run(self):
         monitor = _Monitor(self.events)  # created here: their callbacks arrive here
-        player = _Player(self.events)
+        player = kodiutil.EventPlayer(self.events)
         if not self._wait_for(monitor, lambda: xbmc.getInfoLabel("System.FriendlyName"),
                               self.STARTUP_WAIT, "Kodi"):
             return
-        if not self._wait_for(monitor, lambda: xbmc.getIPAddress() not in ("", "127.0.0.1", "0.0.0.0"),
+        if not self._wait_for(monitor, kodiutil.network_address,
                               self.NETWORK_WAIT, "the network"):
             return
 

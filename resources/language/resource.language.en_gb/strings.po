@@ -35,11 +35,11 @@ msgid "If no HLS manifest is offered, play the best single file that carries bot
 msgstr ""
 
 msgctxt "#30103"
-msgid "Send the legacy manifest_type property"
+msgid "Always send the manifest_type property"
 msgstr ""
 
 msgctxt "#30104"
-msgid "InputStream Adaptive 21 detects HLS from the mime type. Enable this only if playback fails with a manifest type error on an older build."
+msgid "InputStream Adaptive 20 (Kodi 20 Nexus) opens no manifest without it, so it is sent there automatically. InputStream Adaptive 21 detects the type itself; enable this only if playback fails with a manifest type error."
 msgstr ""
 
 msgctxt "#30110"
@@ -123,7 +123,31 @@ msgid "Download subtitles"
 msgstr ""
 
 msgctxt "#30142"
-msgid "Downloads every subtitle track the video's author uploaded, as files Kodi labels by language. Kodi then picks the one matching its own \"Preferred subtitle language\" setting. YouTube's automatic captions are not used: they are machine output, and the translated ones require browser TLS impersonation that no Kodi add-on can provide."
+msgid "Downloads one subtitle track the video's author uploaded, as a file Kodi labels by language: in the subtitle language, else in the fallback language, else the first track the video has. YouTube's automatic captions are not used: they are machine output, and the translated ones require browser TLS impersonation that no Kodi add-on can provide."
+msgstr ""
+
+msgctxt "#30143"
+msgid "Subtitle language"
+msgstr ""
+
+msgctxt "#30144"
+msgid "The language of the subtitle track to download, Kodi's interface language by default. When the video has no subtitles in it, the fallback language below is tried; when it has neither, the first track the author uploaded is downloaded."
+msgstr ""
+
+msgctxt "#30145"
+msgid "Fallback language"
+msgstr ""
+
+msgctxt "#30146"
+msgid "Tried when the video has no subtitles in the language above. When it has neither, the first track the author uploaded is downloaded instead."
+msgstr ""
+
+msgctxt "#30147"
+msgid "Kodi's interface language"
+msgstr ""
+
+msgctxt "#30148"
+msgid "None"
 msgstr ""
 
 
@@ -213,10 +237,6 @@ msgstr ""
 
 msgctxt "#30173"
 msgid "yt-dlp update failed: {}"
-msgstr ""
-
-msgctxt "#30174"
-msgid "Checking for yt-dlp updates…"
 msgstr ""
 
 msgctxt "#30180"
@@ -534,4 +554,160 @@ msgstr ""
 
 msgctxt "#30256"
 msgid "Update"
+msgstr ""
+
+msgctxt "#30257"
+msgid "InputStream Adaptive is disabled: lowest quality. Enable it in Add-ons > VideoPlayer InputStream."
+msgstr ""
+
+msgctxt "#30300"
+msgid "Arabic"
+msgstr ""
+
+msgctxt "#30301"
+msgid "Bulgarian"
+msgstr ""
+
+msgctxt "#30302"
+msgid "Catalan"
+msgstr ""
+
+msgctxt "#30303"
+msgid "Chinese"
+msgstr ""
+
+msgctxt "#30304"
+msgid "Croatian"
+msgstr ""
+
+msgctxt "#30305"
+msgid "Czech"
+msgstr ""
+
+msgctxt "#30306"
+msgid "Danish"
+msgstr ""
+
+msgctxt "#30307"
+msgid "Dutch"
+msgstr ""
+
+msgctxt "#30308"
+msgid "English"
+msgstr ""
+
+msgctxt "#30309"
+msgid "Estonian"
+msgstr ""
+
+msgctxt "#30310"
+msgid "Finnish"
+msgstr ""
+
+msgctxt "#30311"
+msgid "French"
+msgstr ""
+
+msgctxt "#30312"
+msgid "German"
+msgstr ""
+
+msgctxt "#30313"
+msgid "Greek"
+msgstr ""
+
+msgctxt "#30314"
+msgid "Hebrew"
+msgstr ""
+
+msgctxt "#30315"
+msgid "Hindi"
+msgstr ""
+
+msgctxt "#30316"
+msgid "Hungarian"
+msgstr ""
+
+msgctxt "#30317"
+msgid "Indonesian"
+msgstr ""
+
+msgctxt "#30318"
+msgid "Italian"
+msgstr ""
+
+msgctxt "#30319"
+msgid "Japanese"
+msgstr ""
+
+msgctxt "#30320"
+msgid "Korean"
+msgstr ""
+
+msgctxt "#30321"
+msgid "Latvian"
+msgstr ""
+
+msgctxt "#30322"
+msgid "Lithuanian"
+msgstr ""
+
+msgctxt "#30323"
+msgid "Norwegian"
+msgstr ""
+
+msgctxt "#30324"
+msgid "Persian"
+msgstr ""
+
+msgctxt "#30325"
+msgid "Polish"
+msgstr ""
+
+msgctxt "#30326"
+msgid "Portuguese"
+msgstr ""
+
+msgctxt "#30327"
+msgid "Romanian"
+msgstr ""
+
+msgctxt "#30328"
+msgid "Russian"
+msgstr ""
+
+msgctxt "#30329"
+msgid "Serbian"
+msgstr ""
+
+msgctxt "#30330"
+msgid "Slovak"
+msgstr ""
+
+msgctxt "#30331"
+msgid "Slovenian"
+msgstr ""
+
+msgctxt "#30332"
+msgid "Spanish"
+msgstr ""
+
+msgctxt "#30333"
+msgid "Swedish"
+msgstr ""
+
+msgctxt "#30334"
+msgid "Thai"
+msgstr ""
+
+msgctxt "#30335"
+msgid "Turkish"
+msgstr ""
+
+msgctxt "#30336"
+msgid "Ukrainian"
+msgstr ""
+
+msgctxt "#30337"
+msgid "Vietnamese"
 msgstr ""

@@ -20,24 +20,21 @@ Without anything to play it opens the settings.
 import hashlib
 import json
 import os
-import re
-import struct
 import sys
 import time
-import urllib.error
 import urllib.parse
 
 import xbmc
 import xbmcaddon
 import xbmcgui
 import xbmcplugin
-import xbmcvfs
 
-from resources.lib import (cast_kodi, diag, kodilog, manifest_server, mp4index, paths, playback_diag,
-                           request_state, resolver, web_kodi, ytdlp_info, ytdlp_loader)
+from resources.lib import (cast_kodi, diag, kodilog, kodiutil, paths, playback_diag, request_state, resolver,
+                           stream_prep, web_kodi, ytdlp_info, ytdlp_loader)
+from resources.lib.kodilog import log
+from resources.lib.kodiutil import ADDON_ID
 
 ADDON = xbmcaddon.Addon()
-ADDON_ID = ADDON.getAddonInfo("id")
 ADDON_NAME = ADDON.getAddonInfo("name")
 HANDLE = int(sys.argv[1])
 
@@ -50,14 +47,7 @@ STARTED = time.monotonic()
 CACHE_SECONDS = 300
 
 resolve_log = diag.logger("resolve")
-manifest_log = diag.logger("manifest")
-subtitles_log = diag.logger("subtitles")
 ytdlp_log = diag.logger("ytdlp")
-
-
-def log(message, level=xbmc.LOGINFO):
-    """The lines logged whatever the Diagnostics switches say: summaries, warnings, errors."""
-    xbmc.log("[{}] {}".format(ADDON_ID, message), level)
 
 
 class YtdlpLog:
@@ -90,12 +80,6 @@ class YtdlpLog:
 
 def report(result):
     request_state.report(REQUEST, result)
-
-
-def short_error(error):
-    """yt-dlp's message in one line: what to show a user (\"…requires login\")."""
-    text = (str(error).strip().splitlines() or [type(error).__name__])[0]
-    return re.sub(r"^ERROR:\s*", "", text)[:200]
 
 
 def fail(message_id, detail=None):
@@ -152,9 +136,11 @@ def extract(url, switches, flat_playlists=False):
         log("extraction failed after {:.1f} s: {}: {}".format(
             time.monotonic() - started, type(error).__name__, error), xbmc.LOGERROR)
         raise
-    resolve_log.info("extracted in %.1f s: %s", time.monotonic() - started,
-                     resolver.describe_formats(info) if diag.enabled("resolve") and not resolver.is_playlist(info)
-                     else "playlist" if resolver.is_playlist(info) else "")
+    if resolver.is_playlist(info):
+        what = "playlist"
+    else:
+        what = resolver.describe_formats(info) if diag.enabled("resolve") else ""
+    resolve_log.info("extracted in %.1f s: %s", time.monotonic() - started, what)
     return info
 
 
@@ -163,62 +149,6 @@ def as_seconds(value):
         return int(float(value))
     except (TypeError, ValueError):
         return 0
-
-
-def server_base_url():
-    return "http://127.0.0.1:{}".format(ADDON.getSettingInt("http_port"))
-
-
-def server_alive(base_url):
-    """True when the service's manifest server answers on loopback."""
-    try:
-        resolver.fetch(base_url + manifest_server.HEALTH_PATH, timeout=1)
-        return True
-    except (urllib.error.URLError, OSError, ValueError):
-        return False
-
-
-AUDIO_FMP4, AUDIO_AS_PUBLISHED = 0, 1
-
-
-def fetch_head(url, headers, length=65535):
-    return resolver.fetch(url, {**dict(headers or {}), "Range": "bytes=0-{}".format(length)}, timeout=15)
-
-
-def build_audio_playlist(info, out_dir, name):
-    """Write an fMP4 audio media playlist for this video; return its file name.
-
-    Returns (file_name, language) or (None, None) when the video has no fMP4
-    audio to swap in, in which case the caller keeps YouTube's own audio.
-    """
-    audio_url, audio_headers, language = resolver.pick_audio_fmp4(info)
-    if not audio_url:
-        log("no fMP4 audio track; keeping YouTube's packed audio (may start silent)",
-            xbmc.LOGWARNING)
-        return None, None
-    try:
-        head = fetch_head(audio_url, audio_headers)
-        init = mp4index.init_range(head)
-        segments = mp4index.parse_sidx(head)
-    except (urllib.error.URLError, OSError, ValueError, struct.error) as error:
-        # Expected: the audio moved, the head was short, the boxes were odd.
-        log("could not index the fMP4 audio, keeping YouTube's: {}".format(error), xbmc.LOGWARNING)
-        return None, None
-    except Exception as error:  # noqa: BLE001 - never break playback, but say it loudly
-        # A bug on our side (a missing import once hid here for a whole release).
-        # Still fall back so the video plays, but at error level and named.
-        log("BUG indexing the fMP4 audio ({}: {}); keeping YouTube's audio"
-            .format(type(error).__name__, error), xbmc.LOGERROR)
-        return None, None
-    playlist = resolver.build_fmp4_audio_playlist(audio_url, init, segments)
-    audio_name = name + ".audio.m3u8"
-    with xbmcvfs.File(os.path.join(out_dir, audio_name), "w") as handle:
-        handle.write(playlist)
-    itag = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(audio_url).query)).get("itag", "?")
-    manifest_log.info("fMP4 audio: itag %s, language %s, init bytes %d-%d, %d segments, %.0f s",
-                      itag, language or "?", init[0], init[1], len(segments),
-                      sum(duration for _, _, duration in segments))
-    return audio_name, language
 
 
 def prepare_ytdlp():
@@ -253,89 +183,6 @@ def prepare_ytdlp():
     return version, "bundled, fallback"
 
 
-# Manual update: (start %, end %, message) per stage of the progress dialog.
-UPDATE_STAGES = {
-    "check": (0, 5, 30245),
-    "download": (5, 50, 30246),
-    "validate": (50, 75, 30247),
-    "compile": (75, 100, 30248),
-}
-
-
-def update_ytdlp_now():
-    """Settings button: show what runs and what the channel offers; update on request.
-
-    Three of Kodi's own dialogs in a row: the two versions (with "Update" when
-    there is something newer), the progress through every step -- download,
-    validation against Kodi's Python, the one-time compile -- and the outcome.
-    When it says ready, the next playback already runs the new version at full
-    speed. Cancel stops before anything is replaced; cancelled during the
-    compile, the new version is in place and the service finishes compiling it
-    at the next start.
-    """
-    string = ADDON.getLocalizedString
-    channel = ytdlp_loader.SETTING_CHANNELS[ADDON.getSettingInt("ytdlp_channel")]
-    store = paths.ytdlp_directory()
-    dialog = xbmcgui.Dialog()
-
-    busy = xbmcgui.DialogProgress()
-    busy.create(ADDON_NAME, string(30245).format(channel))
-    try:
-        ytdlp_loader.ensure_patched(store)  # a copy an older version left unpatched
-        found = ytdlp_loader.check(store, channel, paths.bundled_ytdlp())
-    except Exception as error:  # noqa: BLE001 - network trouble is an answer here, not a crash
-        busy.close()
-        log("manual yt-dlp check on {} failed: {}".format(channel, error), xbmc.LOGWARNING)
-        dialog.ok(ADDON_NAME, string(30173).format(short_error(error)))
-        return
-    busy.close()
-
-    source = string(30177 if found["source"] == "downloaded" else 30178)
-    versions = "{}: [B]{}[/B] ({})[CR]{}: [B]{}[/B]".format(
-        string(30175), found["version"] or "?", source, string(30252).format(channel), found["latest"])
-    log("manual yt-dlp check on {}: in use {} ({}), latest {}, update {}".format(
-        channel, found["version"], found["source"], found["latest"],
-        "available" if found["available"] else "not needed"))
-    if not found["available"]:
-        dialog.ok(ADDON_NAME, "{}[CR][CR]{}".format(versions, found["reason"] or string(30253)))
-        return
-    if not dialog.yesno(ADDON_NAME, "{}[CR][CR]{}".format(versions, string(30254)),
-                        nolabel=string(30255), yeslabel=string(30256)):
-        return
-
-    progress_dialog = xbmcgui.DialogProgress()
-    progress_dialog.create(ADDON_NAME, string(30245).format(channel))
-
-    def progress(stage, fraction):
-        low, high, message = UPDATE_STAGES[stage]
-        progress_dialog.update(int(low + (high - low) * fraction),
-                               string(message).format(found["latest"] if stage == "download" else channel))
-
-    ready = False
-    try:
-        result = ytdlp_loader.update(store, channel, progress=progress, should_stop=progress_dialog.iscanceled)
-        log("manual yt-dlp update on {}: {}".format(channel, result))
-        if result.status in (ytdlp_loader.UPDATED, ytdlp_loader.UP_TO_DATE):
-            path, _ = ytdlp_loader.current(store)
-            if path and ytdlp_loader.is_patched(path):
-                ready = ytdlp_loader.build_compiled(
-                    path, ytdlp_loader.compiled_dir(store, os.path.basename(path)),
-                    should_stop=progress_dialog.iscanceled, progress=progress)
-    finally:
-        progress_dialog.close()
-    ytdlp_info.refresh(ADDON)
-
-    if result.status in (ytdlp_loader.UPDATED, ytdlp_loader.UP_TO_DATE):
-        outcome = string(30249 if ready else 30251).format(result.version)
-    elif result.status == ytdlp_loader.CANCELLED:
-        outcome = string(30250)
-    elif result.status in (ytdlp_loader.REJECTED, ytdlp_loader.SKIPPED):
-        outcome = string(30172).format(result.reason)
-    else:
-        outcome = string(30173).format(result.reason)
-    dialog.ok(ADDON_NAME, outcome)
-
-
 def show_settings():
     """Opened from the Kodi UI with nothing to play.
 
@@ -356,112 +203,6 @@ def show_settings():
     xbmcplugin.addDirectoryItem(
         HANDLE, "plugin://{}/".format(ADDON_ID), item, isFolder=False)
     xbmcplugin.endOfDirectory(HANDLE, succeeded=True, cacheToDisc=False)
-
-
-def safe_name(video_id):
-    return re.sub(r"[^A-Za-z0-9_-]", "_", video_id or "video")
-
-
-def download_subtitles(info, name):
-    """Save the uploader's subtitles as local files; return their paths.
-
-    Kodi reads the language from the file name: CUtil::GetExternalStreamDetailsFromFilename
-    strips the video's base name, splits the rest on " .-" and walks the tokens
-    backwards until one converts to an ISO code, so "<video id>.<lang>.srt"
-    labels each track. Kodi then ranks these external tracks against its own
-    "Preferred subtitle language" setting and selects the best match itself.
-    """
-    if not ADDON.getSettingBool("subtitles_enabled"):
-        subtitles_log.info("switched off in the settings")
-        return []
-
-    out_dir = paths.manifest_directory()
-    chosen = resolver.pick_subtitles(info)
-    subtitles_log.info("uploaded by the author: %s; automatic captions (not used): %d languages; downloading: %s",
-                       ", ".join(sorted(info.get("subtitles") or {})) or "none",
-                       len(info.get("automatic_captions") or {}),
-                       ", ".join(language for language, _ in chosen) or "nothing")
-    saved = []
-    for language, url in chosen:
-        target = os.path.join(out_dir, "{}.{}.srt".format(name, language))
-        started = time.monotonic()
-        try:
-            data = resolver.fetch_subtitle(url)
-        except Exception as error:  # noqa: BLE001 - one bad track must not stop playback
-            log("subtitles: {} failed ({}: {}), skipping".format(
-                language, type(error).__name__, error), xbmc.LOGWARNING)
-            continue
-        with xbmcvfs.File(target, "w") as handle:
-            handle.write(data)
-        subtitles_log.info("%s: %d bytes in %.0f ms -> %s", language, len(data),
-                           (time.monotonic() - started) * 1000, os.path.basename(target))
-        saved.append(target)
-    return saved
-
-
-def apply_manifest_filters(info, url, headers, video_id):
-    """Rewrite the master playlist according to the settings.
-
-    Returns (url_for_isa, served_locally). Whenever the rewrite cannot be
-    delivered -- switched off, server down, fetch failed, nothing to change --
-    the original URL comes back, which is exactly what 1.0.0 did. A local file
-    path is never returned: InputStream Adaptive does not accept one.
-    """
-    if not ADDON.getSettingBool("rewrite_manifest"):
-        manifest_log.info("rewriting switched off: playing the manifest as published")
-        return url, False
-
-    base_url = server_base_url()
-    if not server_alive(base_url):
-        log("manifest server not reachable at {}, playing the manifest as published"
-            .format(base_url), xbmc.LOGWARNING)
-        return url, False
-
-    try:
-        text = resolver.fetch_manifest(url, headers)
-    except Exception as error:  # noqa: BLE001 - a network hiccup must not stop playback
-        log("could not fetch the manifest for filtering, playing it as published: {}"
-            .format(error), xbmc.LOGWARNING)
-        return url, False
-
-    out_dir = paths.manifest_directory()
-    name = safe_name(video_id)
-    if diag.enabled("manifest"):
-        manifest_log.info("as published: %s", resolver.describe_variants(text))
-        original = os.path.join(out_dir, name + ".original.txt")
-        with xbmcvfs.File(original, "w") as handle:
-            handle.write(text)
-        manifest_log.info("original kept as %s", original)
-
-    # Video only: resolution, codec and best-quality. Audio is handled by the swap.
-    text, video_changed, _ = resolver.filter_manifest(
-        text,
-        max_height=ADDON.getSettingInt("max_height"),
-        video_codec=ADDON.getSettingInt("video_codec"),
-        quality=ADDON.getSettingInt("quality_mode"))
-
-    audio_changed = False
-    if ADDON.getSettingInt("audio_mode") == AUDIO_FMP4:
-        # The fix for the packed-ADTS start-silence: replace the audio with the
-        # fMP4 track, read by the same reader as the video.
-        audio_name, language = build_audio_playlist(info, out_dir, name)
-        if audio_name:
-            audio_uri = "{}/{}".format(base_url, audio_name)
-            text = resolver.swap_audio_to_fmp4(text, audio_uri, language)
-            audio_changed = True
-
-    if not (video_changed or audio_changed):
-        manifest_log.info("nothing to rewrite: playing the manifest as published")
-        return url, False
-
-    master_name = name + ".m3u8"
-    with xbmcvfs.File(os.path.join(out_dir, master_name), "w") as handle:
-        handle.write(text)
-    served = "{}/{}".format(base_url, master_name)
-    if diag.enabled("manifest"):
-        manifest_log.info("rewritten: %s", resolver.describe_variants(text))
-    manifest_log.info("served to InputStream Adaptive from %s", served)
-    return served, True
 
 
 def pick_stream(info):
@@ -508,23 +249,55 @@ def resolve_item(params, switches):
                 url = entries[0][0]
                 info = extract(url, switches)
         except Exception as error:  # noqa: BLE001 - any extractor failure is the same to us
-            return fail(30011, short_error(error))
+            return fail(30011, resolver.short_error(error))
 
     stream, headers, kind = pick_stream(info)
     if not stream:
         return fail(30012)
-    adaptive = kind in ("HLS", "DASH")
+    if kind in ("HLS", "DASH"):
+        warn_if_isa_disabled()
     video = video_id or info.get("id")
+    stream, served_locally, subtitle = stream_prep.prepare(ADDON, info, stream, headers, kind, video)
 
-    # The manifest rewrite answers YouTube's quirks (packed audio silent at the
-    # start, duplicate audio groups, no DEFAULT); other sites' manifests have
-    # none of them and go to InputStream Adaptive exactly as published.
-    served_locally = False
-    if kind == "HLS" and resolver.is_youtube(info):
-        stream, served_locally = apply_manifest_filters(info, stream, headers, video)
-    elif adaptive:
-        manifest_log.info("not YouTube (%s): playing the %s manifest as published", info.get("extractor_key"), kind)
+    # A link with ?t=… starts there, unless the caller asked for a position.
+    if not seek and info.get("start_time"):
+        seek = as_seconds(info.get("start_time"))
+    item = _list_item(info, stream, headers, kind, served_locally, subtitle[1] if subtitle else None, seek)
 
+    log("play {} ({}): yt-dlp {} ({}), {}, manifest {}, subtitles {}, seek {}s, ready in {:.1f} s".format(
+        video, info.get("extractor_key") or "?", ytdlp_version, ytdlp_source, kind,
+        "rewritten" if served_locally else ("as published" if kind in ("HLS", "DASH") else "-"),
+        subtitle[0] if subtitle else "-", seek, time.monotonic() - STARTED))
+    playback_diag.mark_playing(video, kind, served_locally, source=params.get("url") or url,
+                               site=info.get("extractor_key"), title=info.get("title") or "")
+    report("ok")
+    xbmcplugin.setResolvedUrl(HANDLE, True, item)
+
+
+def manifest_type_reason():
+    """Why inputstream.adaptive.manifest_type goes with the item, or None when it does not."""
+    if kodiutil.isa_needs_manifest_type():
+        return "InputStream Adaptive {} needs it".format(kodiutil.inputstream_adaptive()[0] or "before 21")
+    if ADDON.getSettingBool("legacy_manifest_type"):
+        return "forced in the settings"
+    return None
+
+
+def warn_if_isa_disabled():
+    """Say so when InputStream Adaptive is disabled: Kodi then plays the manifest
+    itself, in its lowest quality, without a word in the log. Playback goes on."""
+    version, enabled = kodiutil.inputstream_adaptive()
+    if enabled:
+        return
+    log("InputStream Adaptive {}is disabled: Kodi plays the manifest itself, in the lowest quality; "
+        "enable it in Add-ons > My add-ons > VideoPlayer InputStream".format(version + " " if version else ""),
+        xbmc.LOGWARNING)
+    xbmcgui.Dialog().notification(ADDON_NAME, ADDON.getLocalizedString(30257), xbmcgui.NOTIFICATION_WARNING, 8000)
+
+
+def _list_item(info, stream, headers, kind, served_locally, subtitle_file, seek):
+    """What Kodi plays: the stream, what InputStream Adaptive needs for it, subtitles, title, start position."""
+    adaptive = kind in ("HLS", "DASH")
     item = xbmcgui.ListItem(path=stream if adaptive else resolver.kodi_url(stream, headers))
     item.setContentLookup(False)
 
@@ -538,18 +311,18 @@ def resolve_item(params, switches):
             item.setProperty("inputstream.adaptive.stream_headers", encoded)
             if not served_locally:
                 item.setProperty("inputstream.adaptive.manifest_headers", encoded)
-        # ISA 21 detects the type from the mime type; the explicit property is
-        # only there for older builds that still want to be told.
-        if ADDON.getSettingBool("legacy_manifest_type"):
+        # ISA 21 detects the type from the mime type (and warns about the
+        # property); ISA 20, Kodi 20 Nexus's, opens no manifest without it.
+        reason = manifest_type_reason()
+        if reason:
             item.setProperty("inputstream.adaptive.manifest_type", "hls" if kind == "HLS" else "mpd")
+            resolve_log.info("manifest_type sent: %s", reason)
 
-    subtitle_files = download_subtitles(info, safe_name(video))
-    if subtitle_files:
-        item.setSubtitles(subtitle_files)
+    if subtitle_file:
+        item.setSubtitles([subtitle_file])
 
-    title = info.get("title") or ""
     tag = item.getVideoInfoTag()
-    tag.setTitle(title)
+    tag.setTitle(info.get("title") or "")
     tag.setPlot(info.get("description") or "")
     duration = as_seconds(info.get("duration"))
     tag.setDuration(duration)
@@ -558,22 +331,11 @@ def resolve_item(params, switches):
     if thumbnail:
         item.setArt({"thumb": thumbnail, "icon": thumbnail})
 
-    # A link with ?t=… starts there, unless the caller asked for a position.
-    if not seek and info.get("start_time"):
-        seek = as_seconds(info.get("start_time"))
     # Resuming needs both halves; Kodi ignores ResumeTime on its own.
     if seek > 0 and duration > 0:
         item.setProperty("ResumeTime", str(seek))
         item.setProperty("TotalTime", str(duration))
-
-    log("play {} ({}): yt-dlp {} ({}), {}, manifest {}, {} subtitle track(s), seek {}s, ready in {:.1f} s".format(
-        video, info.get("extractor_key") or "?", ytdlp_version, ytdlp_source, kind,
-        "rewritten" if served_locally else ("as published" if adaptive else "-"), len(subtitle_files), seek,
-        time.monotonic() - STARTED))
-    playback_diag.mark_playing(video, kind, served_locally, source=params.get("url") or url,
-                               site=info.get("extractor_key"), title=title)
-    report("ok")
-    xbmcplugin.setResolvedUrl(HANDLE, True, item)
+    return item
 
 
 def play_url(params, switches):
@@ -594,7 +356,7 @@ def play_url(params, switches):
     try:
         info = extract(url, switches, flat_playlists=True)
     except Exception as error:  # noqa: BLE001 - reported to the web page and on screen
-        return fail(30011, short_error(error))
+        return fail(30011, resolver.short_error(error))
 
     if resolver.is_playlist(info):
         entries = resolver.playlist_entries(info)
@@ -637,7 +399,7 @@ def main():
     # Actions, not playable items -- handled before anything else.
     action = params.get("action")
     if action == "update_ytdlp":
-        return update_ytdlp_now()
+        return ytdlp_info.update_dialog(ADDON)
     if action == "pair":
         return cast_kodi.pair_with_tv_code()
     if action == "play_url":

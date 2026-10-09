@@ -56,7 +56,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 
-from . import diag
+from . import diag, fileutil
 
 log = diag.logger("updates")
 
@@ -75,6 +75,13 @@ UP_TO_DATE, UPDATED, SKIPPED, REJECTED, FAILED = (
     "up_to_date", "updated", "skipped", "rejected", "failed")
 CANCELLED = "cancelled"
 
+# Written as the ZIP comment of every archive whose \\N{} escapes were rewritten.
+PATCH_MARK = b"ytdlpcast:named-escapes-1"
+_NAMED_ESCAPE = re.compile(r"\\N\{([^}\\]+)\}")
+
+_MIN_SUPPORTED = re.compile(r"MIN_SUPPORTED\s*,\s*MIN_RECOMMENDED\s*=\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)")
+_VERSION = re.compile(r"""^__version__\s*=\s*['"]([^'"]+)['"]""", re.M)
+
 
 class Cancelled(Exception):
     """The user stopped a check they started from the settings."""
@@ -88,13 +95,6 @@ def _report(progress, stage, fraction):
 def _check(should_stop):
     if should_stop is not None and should_stop():
         raise Cancelled()
-
-# Written as the ZIP comment of every archive whose \\N{} escapes were rewritten.
-PATCH_MARK = b"ytdlpcast:named-escapes-1"
-_NAMED_ESCAPE = re.compile(r"\\N\{([^}\\]+)\}")
-
-_MIN_SUPPORTED = re.compile(r"MIN_SUPPORTED\s*,\s*MIN_RECOMMENDED\s*=\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)")
-_VERSION = re.compile(r"""^__version__\s*=\s*['"]([^'"]+)['"]""", re.M)
 
 
 class Result:
@@ -287,11 +287,7 @@ def _read_state(store_dir):
 
 
 def _write_state(store_dir, state):
-    # Write-then-rename: a reader never sees a half-written file.
-    fd, tmp = tempfile.mkstemp(dir=store_dir, prefix=".state-")
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        json.dump(state, handle, indent=1, sort_keys=True)
-    os.replace(tmp, os.path.join(store_dir, STATE))
+    fileutil.write_json_atomic(os.path.join(store_dir, STATE), state, indent=1, sort_keys=True)
 
 
 def current(store_dir):
@@ -355,7 +351,12 @@ def compiled_dir(store_dir, archive_name):
 
 
 def bundled_dir(store_dir, version):
-    return os.path.join(store_dir, "bundled-" + re.sub(r"[^A-Za-z0-9._-]", "_", version))
+    return os.path.join(store_dir, "bundled-" + _safe_version(version))
+
+
+def _safe_version(version):
+    """A version string as a file name: yt-dlp's are "2026.08.19" or "2026.08.19.232755"."""
+    return re.sub(r"[^A-Za-z0-9._-]", "_", version)
 
 
 def is_compiled(directory):
@@ -607,7 +608,7 @@ def _update(store_dir, channel, python, timeout, progress=None, should_stop=None
 
     _report(progress, "check", 0)
     try:
-        sha = published_sha256(channel)
+        sha = published_sha256(channel, timeout)
     except Cancelled:
         raise
     except Exception as error:  # noqa: BLE001 - network trouble is an outcome, not a crash
@@ -644,7 +645,7 @@ def _update(store_dir, channel, python, timeout, progress=None, should_stop=None
         if not ok:
             return _reject(store_dir, state, sha, reason)
         version, _ = inspect(tmp)
-        name = "yt-dlp-{}.zip".format(re.sub(r"[^A-Za-z0-9._-]", "_", version))
+        name = "yt-dlp-{}.zip".format(_safe_version(version))
         target = os.path.join(store_dir, name)
         if not os.path.exists(target):  # versioned: never overwrite a file in place
             os.replace(tmp, target)

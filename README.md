@@ -131,13 +131,19 @@ play it" approach does not work. The HLS manifest is what makes a single-URL han
 
 ## Requirements
 
+Kodi 21 Omega or Kodi 20 Nexus: CoreELEC, LibreELEC, Android. Not Windows: Kodi ships Python
+3.8 there, which yt-dlp no longer runs on.
+
 | add-on | why |
 |---|---|
-| `inputstream.adaptive` | the demuxer; built into CoreELEC and LibreELEC |
+| `inputstream.adaptive` | the demuxer; built into CoreELEC and LibreELEC, shipped with Kodi for Android |
 | `script.module.certifi` | the CA bundle for HTTPS, in the official Kodi repository |
 
 yt-dlp itself is **not** a dependency: the add-on ships a copy and keeps it current on its own.
 Nor is TubeCast: casting is built in.
+
+InputStream Adaptive has to be enabled. Kodi skips a disabled one without a word and plays the
+manifest itself, in the lowest quality; the add-on says so on screen and in the log.
 
 ## Installation
 
@@ -167,7 +173,7 @@ downloads that file, checks it, and puts it on `sys.path`.
   the SHA-256 against the release's own `SHA2-256SUMS`; the minimum Python it declares; and a
   parse of every source file with the running interpreter's grammar. A release that fails is
   rejected, remembered so it is not downloaded again, and the current version stays.
-* **Why the Python check matters**: Kodi 21 ships Python 3.11, and yt-dlp drops old Pythons
+* **Why the Python check matters**: Kodi 20 and 21 ship Python 3.11, and yt-dlp drops old Pythons
   over time (3.9 went in 2025-10). When it drops 3.11, the add-on keeps the last compatible
   version instead of downloading one that cannot run — playback keeps working, it just stops
   getting fresher, and the log says so.
@@ -179,9 +185,10 @@ downloads that file, checks it, and puts it on `sys.path`.
   once, in the background (after an update, and for the bundled copy at start); playback then
   loads the compiled files. Until that is done, the archive is used as before.
 * **No `\N{…}` escapes**: before anything compiles yt-dlp, the add-on rewrites the `\N{NAME}`
-  escapes in its string literals as `\uXXXX`. Kodi 21's Python (3.11) decodes `\N{}` through a
-  pointer kept for the whole process, set by the first interpreter that needs it; Kodi ends
-  that interpreter after the plugin call, and the next `\N{}` anywhere in Kodi then crashed it.
+  escapes in its string literals as `\uXXXX`. Python 3.11, in Kodi 20 and 21, decodes `\N{}`
+  through a pointer kept for the whole process, set by the first interpreter that needs it;
+  Kodi ends that interpreter after the plugin call, and the next `\N{}` anywhere in Kodi then
+  crashed it.
   Python 3.12 fixed this; until Kodi ships it, no `\N{}` is ever decoded here.
 * **Storage**: `addon_data/plugin.video.ytdlpcast/ytdlp/`, one archive per version, never
   overwritten in place (zipimport caches a ZIP's directory per path), current and previous
@@ -195,12 +202,12 @@ ends at the yt-dlp project's GitHub releases, as it did with any repackaged modu
 ## Diagnostics
 
 Without any switch the add-on writes little to `kodi.log`: warnings, errors, and one summary
-line per playback (`play <id>: yt-dlp <version> (<source>), HLS, manifest rewritten, 2 subtitle
-track(s), seek 0s, ready in 3.0 s`), per update check and per phone connection.
+line per playback (`play <id>: yt-dlp <version> (<source>), HLS, manifest rewritten, subtitles
+pl, seek 0s, ready in 3.0 s`), per update check and per phone connection.
 
 For more, *Settings → Diagnostics* has a switch per area. The tab is shown only at the
 **Expert** settings level, and every switch is off by default. Each writes at INFO level —
-which Kodi 21 logs without its own debug mode — under its own prefix,
+which Kodi 20 and 21 log without their own debug mode — under its own prefix,
 `[plugin.video.ytdlpcast] <area>:`, so one `grep` isolates an area:
 
 | switch | prefix | what it adds |
@@ -300,33 +307,45 @@ failed, nothing changed — the add-on hands over YouTube's original URL, exactl
   track (itag 140) rebuilt as an fMP4 byte-range playlist, which the same fragmented reader as
   the video plays from the first frame. Confirmed working on CoreELEC Omega. *As published* keeps YouTube's own audio for
   diagnosis. This also collapses the old duplicate-audio-group and dubbing issues: the fMP4
-  track is a single AAC-LC rendition, chosen in the video's original language.
+  track is a single AAC-LC rendition, chosen in the video's original language. When the swap
+  cannot be made (no itag 140, as on live streams, or an unreadable `sidx`), YouTube's own
+  audio is trimmed instead: one AAC-LC group, machine-dubbed tracks dropped.
 
 ### Subtitles
 
-* **Download subtitles** — on by default. Downloads every subtitle track the video's **author
-  uploaded**, as `<video id>.<lang>.srt` files in Kodi's temp directory, handed to the player
-  with `setSubtitles()`.
+* **Download subtitles** — on by default. Downloads **one** subtitle track the video's
+  **author uploaded**, as `<video id>.<lang>.srt` (or `.vtt`) in Kodi's temp directory, handed
+  to the player with `setSubtitles()`.
+* **Subtitle language** — *Kodi's interface language* (default) or one of 38 languages.
+* **Fallback language** — *English* (default), another language, or *None*.
 
-Kodi reads the language from the file name and ranks these external tracks against its own
-**Settings → Player → Language → Preferred subtitle language**, so it selects the best match
-by itself — `VideoPlayer.cpp` scores "an external sub whose language matches the preferred
-subtitle's language" explicitly, and honours the `original` and `forced_only` modes too.
-Nothing is searched for on disk: the files are attached to the playing item.
+The track is the one in the subtitle language; when the video has none, the one in the
+fallback language; **when it has neither, the first track the author uploaded**, whatever its
+language — the settings' help says so too. A track that fails to download is replaced by the
+next candidate; a `429 Too Many Requests` ends the attempt, since YouTube then refuses this
+client rather than one track. YouTube's codes are matched by primary language (`en` takes
+`en`, then `en-GB`), its withdrawn `iw` counting as Hebrew.
+
+Kodi reads the language from the file name, so the track is labelled in the OSD. Nothing is
+searched for on disk: the file is attached to the playing item.
 
 YouTube's automatic captions are deliberately not used. They are machine output, and the
 machine-*translated* ones cannot be fetched at all: that endpoint requires browser TLS
 impersonation (`curl_cffi`), answering HTTP 429 to everything else — yt-dlp itself included.
 There is no Kodi module providing it, and it ships as per-architecture binaries, so no add-on
-can. Author-uploaded tracks have no such limit: five languages download in half a second.
+can. Author-uploaded tracks have no such limit, and the one track is fetched alongside the
+manifest. Up to 2.3.0 every uploaded track was downloaded and Kodi chose: a talk with fifty
+languages meant fifty requests on every playback, enough on their own to draw a 429.
 
 ### Playback
 
 * **Fall back to a progressive stream** — if no HLS manifest is offered, play the best single
   file carrying both video and audio. Rarely helps on YouTube, since such formats mostly no
   longer exist; useful for other sites.
-* **Send the legacy manifest_type property** — off by default. InputStream Adaptive 21
-  detects HLS from the mime type. Enable only if an older build refuses the manifest.
+* **Always send the manifest_type property** — off by default. InputStream Adaptive 20
+  (Kodi 20 Nexus) opens no manifest without it, so there it is sent automatically; version 21
+  detects the type itself and only warns about the property. Enable only if a build refuses
+  the manifest with a manifest type error.
 * **Local manifest server port** — `50153` by default (`plugin.video.youtube` uses 50152).
   The server listens on loopback only and serves nothing but `.m3u8` files from one
   directory; it restarts by itself when the port is changed. If the port cannot be bound, the
@@ -348,8 +367,8 @@ Settings and messages are translated to Polish; English is the source language.
   above can only narrow that list, never extend it.
 * **Only the manifest is served locally.** The rewritten playlist sits in Kodi's temp
   directory and is served from `127.0.0.1`; the segment URLs inside it are YouTube's absolute
-  ones, so no media is proxied. Look for `manifest server listening on` and `playing a
-  rewritten manifest from` in Kodi's log to confirm the path is in use.
+  ones, so no media is proxied. The summary line of each playback says `manifest rewritten`
+  when this path is in use; *Manifest rewriting* diagnostics add the served URL.
 * **VOD only in practice.** Live streams work, but seeking backwards is limited to whatever
   DVR window the broadcaster provides — a server-side limit, not one imposed here.
 * **JavaScript runtime.** yt-dlp warns that YouTube extraction without a JS runtime (deno,

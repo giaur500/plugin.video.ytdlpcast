@@ -20,10 +20,10 @@ import struct
 import threading
 import time
 import urllib.parse
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from xml.sax.saxutils import escape
 
-from . import diag
+from . import diag, httpserve
 
 ssdp_log = diag.logger("cast.ssdp")
 dial_log = diag.logger("cast.dial")
@@ -36,6 +36,8 @@ DIAL_SERVICE = "urn:dial-multiscreen-org:service:dial:1"
 DESCRIPTION_PATH = "/ssdp/device-desc.xml"
 APP_PATH = "/apps/YouTube"
 RUN_PATH = APP_PATH + "/run"
+# A launch carries a pairing code and a few form fields.
+MAX_BODY = 16 * 1024
 
 SSDP_RESPONSE = (
     "HTTP/1.1 200 OK\r\n"
@@ -209,7 +211,10 @@ class _DialHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]
-        length = int(self.headers.get("Content-Length") or 0)
+        length = httpserve.content_length(self.headers)
+        if length is None or length > MAX_BODY:
+            self.close_connection = True  # the unread body must not be parsed as the next request
+            return self._respond(400, "bad request", content_type="text/plain")
         body = self.rfile.read(length).decode("utf-8", "replace") if length else ""
         form = dict(urllib.parse.parse_qsl(body))
         dial_log.info("%s POST %s %s", self.client_address[0], path,
@@ -248,35 +253,22 @@ class _DialHandler(BaseHTTPRequestHandler):
         pass  # requests are logged above, through the add-on's logger
 
 
-class DialServer:
+class DialServer(httpserve.ServerThread):
     """The DIAL HTTP endpoint, on all interfaces and a port the system picks.
 
     app supplies name, uuid, is_running(), launch(form) -> bool and stop().
     """
 
     def __init__(self, app, host="0.0.0.0", port=0):
+        super().__init__(_DialHandler, host, port, "ytdlpcast-dial", app=app)
         self.app = app
-        self.host = host
-        self.port = port
-        self._httpd = None
-        self._thread = None
 
     def start(self):
         """Bind and serve in a daemon thread; return the port. Raises OSError."""
-        self._httpd = ThreadingHTTPServer((self.host, self.port), _DialHandler)
-        self._httpd.daemon_threads = True
-        self._httpd.app = self.app
-        self.port = self._httpd.server_address[1]
-        self._thread = threading.Thread(target=self._httpd.serve_forever, name="ytdlpcast-dial", daemon=True)
-        self._thread.start()
-        dial_log.info("DIAL server listening on %s:%d as \"%s\"", self.host, self.port, self.app.name)
-        return self.port
+        port = super().start()
+        dial_log.info("DIAL server listening on %s:%d as \"%s\"", self.host, port, self.app.name)
+        return port
 
-    def stop(self):
-        if self._httpd is None:
-            return
-        self._httpd.shutdown()
-        self._httpd.server_close()
-        self._thread.join(timeout=3)
-        self._httpd = self._thread = None
-        dial_log.info("stopped")
+    def stop(self, timeout=3):
+        if super().stop(timeout):
+            dial_log.info("stopped")

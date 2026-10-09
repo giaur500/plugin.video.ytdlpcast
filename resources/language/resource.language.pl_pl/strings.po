@@ -35,12 +35,12 @@ msgid "If no HLS manifest is offered, play the best single file that carries bot
 msgstr "Gdy film nie udostępnia manifestu HLS, odtwórz najlepszy pojedynczy plik zawierający obraz i dźwięk razem. Na YouTube pomaga rzadko, bo takie formaty w większości już nie istnieją; przydaje się na innych serwisach."
 
 msgctxt "#30103"
-msgid "Send the legacy manifest_type property"
-msgstr "Wysyłaj przestarzałą właściwość manifest_type"
+msgid "Always send the manifest_type property"
+msgstr "Zawsze wysyłaj właściwość manifest_type"
 
 msgctxt "#30104"
-msgid "InputStream Adaptive 21 detects HLS from the mime type. Enable this only if playback fails with a manifest type error on an older build."
-msgstr "InputStream Adaptive 21 rozpoznaje HLS po typie MIME. Włącz tylko wtedy, gdy na starszej wersji odtwarzanie kończy się błędem typu manifestu."
+msgid "InputStream Adaptive 20 (Kodi 20 Nexus) opens no manifest without it, so it is sent there automatically. InputStream Adaptive 21 detects the type itself; enable this only if playback fails with a manifest type error."
+msgstr "InputStream Adaptive 20 (Kodi 20 Nexus) bez niej nie otworzy manifestu, więc tam jest wysyłana automatycznie. InputStream Adaptive 21 rozpoznaje typ sam; włącz tylko wtedy, gdy odtwarzanie kończy się błędem typu manifestu."
 
 msgctxt "#30110"
 msgid "Picture & sound (YouTube)"
@@ -123,8 +123,32 @@ msgid "Download subtitles"
 msgstr "Pobieraj napisy"
 
 msgctxt "#30142"
-msgid "Downloads every subtitle track the video's author uploaded, as files Kodi labels by language. Kodi then picks the one matching its own \"Preferred subtitle language\" setting. YouTube's automatic captions are not used: they are machine output, and the translated ones require browser TLS impersonation that no Kodi add-on can provide."
-msgstr "Pobiera wszystkie napisy wgrane przez autora filmu jako pliki, którym Kodi nadaje etykiety językowe. Kodi samo wybiera ścieżkę pasującą do swojego ustawienia „Preferowany język napisów”. Napisy automatyczne YouTube nie są używane: to wynik pracy maszyny, a ich tłumaczenia wymagają podszycia się pod przeglądarkę na poziomie TLS, czego żaden dodatek Kodi nie zapewni."
+msgid "Downloads one subtitle track the video's author uploaded, as a file Kodi labels by language: in the subtitle language, else in the fallback language, else the first track the video has. YouTube's automatic captions are not used: they are machine output, and the translated ones require browser TLS impersonation that no Kodi add-on can provide."
+msgstr "Pobiera jedną ścieżkę napisów wgraną przez autora filmu jako plik, któremu Kodi nadaje etykietę językową: w języku napisów, a gdy jej nie ma — w języku zapasowym, a gdy i tej nie ma — pierwszą ścieżkę filmu. Napisy automatyczne YouTube nie są używane: to wynik pracy maszyny, a ich tłumaczenia wymagają podszycia się pod przeglądarkę na poziomie TLS, czego żaden dodatek Kodi nie zapewni."
+
+msgctxt "#30143"
+msgid "Subtitle language"
+msgstr "Język napisów"
+
+msgctxt "#30144"
+msgid "The language of the subtitle track to download, Kodi's interface language by default. When the video has no subtitles in it, the fallback language below is tried; when it has neither, the first track the author uploaded is downloaded."
+msgstr "Język ścieżki napisów do pobrania, domyślnie język interfejsu Kodi. Gdy film nie ma w nim napisów, próbowany jest język zapasowy poniżej; gdy nie ma żadnego z nich, pobierana jest pierwsza ścieżka wgrana przez autora."
+
+msgctxt "#30145"
+msgid "Fallback language"
+msgstr "Język zapasowy"
+
+msgctxt "#30146"
+msgid "Tried when the video has no subtitles in the language above. When it has neither, the first track the author uploaded is downloaded instead."
+msgstr "Próbowany, gdy film nie ma napisów w języku powyżej. Gdy nie ma żadnego z nich, pobierana jest pierwsza ścieżka wgrana przez autora."
+
+msgctxt "#30147"
+msgid "Kodi's interface language"
+msgstr "Język interfejsu Kodi"
+
+msgctxt "#30148"
+msgid "None"
+msgstr "Brak"
 
 msgctxt "#30150"
 msgid "Rewrite YouTube's manifest (enables the settings below)"
@@ -209,10 +233,6 @@ msgstr "Nie zastosowano aktualizacji yt-dlp: {}"
 msgctxt "#30173"
 msgid "yt-dlp update failed: {}"
 msgstr "Aktualizacja yt-dlp nie powiodła się: {}"
-
-msgctxt "#30174"
-msgid "Checking for yt-dlp updates…"
-msgstr "Sprawdzanie aktualizacji yt-dlp…"
 
 msgctxt "#30180"
 msgid "Cast"
@@ -530,3 +550,159 @@ msgstr "Zamknij"
 msgctxt "#30256"
 msgid "Update"
 msgstr "Aktualizuj"
+
+msgctxt "#30257"
+msgid "InputStream Adaptive is disabled: lowest quality. Enable it in Add-ons > VideoPlayer InputStream."
+msgstr "InputStream Adaptive jest wyłączony: najniższa jakość. Włącz go w Dodatki > VideoPlayer InputStream."
+
+msgctxt "#30300"
+msgid "Arabic"
+msgstr "Arabski"
+
+msgctxt "#30301"
+msgid "Bulgarian"
+msgstr "Bułgarski"
+
+msgctxt "#30302"
+msgid "Catalan"
+msgstr "Kataloński"
+
+msgctxt "#30303"
+msgid "Chinese"
+msgstr "Chiński"
+
+msgctxt "#30304"
+msgid "Croatian"
+msgstr "Chorwacki"
+
+msgctxt "#30305"
+msgid "Czech"
+msgstr "Czeski"
+
+msgctxt "#30306"
+msgid "Danish"
+msgstr "Duński"
+
+msgctxt "#30307"
+msgid "Dutch"
+msgstr "Niderlandzki"
+
+msgctxt "#30308"
+msgid "English"
+msgstr "Angielski"
+
+msgctxt "#30309"
+msgid "Estonian"
+msgstr "Estoński"
+
+msgctxt "#30310"
+msgid "Finnish"
+msgstr "Fiński"
+
+msgctxt "#30311"
+msgid "French"
+msgstr "Francuski"
+
+msgctxt "#30312"
+msgid "German"
+msgstr "Niemiecki"
+
+msgctxt "#30313"
+msgid "Greek"
+msgstr "Grecki"
+
+msgctxt "#30314"
+msgid "Hebrew"
+msgstr "Hebrajski"
+
+msgctxt "#30315"
+msgid "Hindi"
+msgstr "Hindi"
+
+msgctxt "#30316"
+msgid "Hungarian"
+msgstr "Węgierski"
+
+msgctxt "#30317"
+msgid "Indonesian"
+msgstr "Indonezyjski"
+
+msgctxt "#30318"
+msgid "Italian"
+msgstr "Włoski"
+
+msgctxt "#30319"
+msgid "Japanese"
+msgstr "Japoński"
+
+msgctxt "#30320"
+msgid "Korean"
+msgstr "Koreański"
+
+msgctxt "#30321"
+msgid "Latvian"
+msgstr "Łotewski"
+
+msgctxt "#30322"
+msgid "Lithuanian"
+msgstr "Litewski"
+
+msgctxt "#30323"
+msgid "Norwegian"
+msgstr "Norweski"
+
+msgctxt "#30324"
+msgid "Persian"
+msgstr "Perski"
+
+msgctxt "#30325"
+msgid "Polish"
+msgstr "Polski"
+
+msgctxt "#30326"
+msgid "Portuguese"
+msgstr "Portugalski"
+
+msgctxt "#30327"
+msgid "Romanian"
+msgstr "Rumuński"
+
+msgctxt "#30328"
+msgid "Russian"
+msgstr "Rosyjski"
+
+msgctxt "#30329"
+msgid "Serbian"
+msgstr "Serbski"
+
+msgctxt "#30330"
+msgid "Slovak"
+msgstr "Słowacki"
+
+msgctxt "#30331"
+msgid "Slovenian"
+msgstr "Słoweński"
+
+msgctxt "#30332"
+msgid "Spanish"
+msgstr "Hiszpański"
+
+msgctxt "#30333"
+msgid "Swedish"
+msgstr "Szwedzki"
+
+msgctxt "#30334"
+msgid "Thai"
+msgstr "Tajski"
+
+msgctxt "#30335"
+msgid "Turkish"
+msgstr "Turecki"
+
+msgctxt "#30336"
+msgid "Ukrainian"
+msgstr "Ukraiński"
+
+msgctxt "#30337"
+msgid "Vietnamese"
+msgstr "Wietnamski"

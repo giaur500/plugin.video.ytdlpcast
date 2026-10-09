@@ -11,7 +11,6 @@ import json
 import os
 import random
 import secrets
-import tempfile
 import threading
 import urllib.parse
 
@@ -19,23 +18,15 @@ import xbmc
 import xbmcaddon
 import xbmcvfs
 
-from . import diag, playback_diag, request_state, web_server
+from . import diag, fileutil, kodiutil, playback_diag, request_state, web_server
+from .kodiutil import ADDON_ID, json_rpc
 
-ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
 ADDRESS_SETTING = "web_address"
 PIN_SETTING = "web_pin"
 VIDEO_PLAYLIST = 1
 MAX_URL = 2048
 
 log = diag.logger("web")
-
-
-def rpc(method, params=None):
-    reply = json.loads(xbmc.executeJSONRPC(json.dumps(
-        {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}})))
-    if "error" in reply:
-        raise RuntimeError("{}: {}".format(method, reply["error"].get("message", reply["error"])))
-    return reply.get("result")
 
 
 def _seconds(value):
@@ -65,16 +56,17 @@ class KodiBackend:
     """What web_server needs from Kodi."""
 
     def _video_player(self):
-        players = rpc("Player.GetActivePlayers") or []
+        players = json_rpc("Player.GetActivePlayers") or []
         return next((p["playerid"] for p in players if p.get("type") in ("video", "audio")), None)
 
     def status(self, request=None):
         result = {"state": "stopped"}
         player = self._video_player()
         if player is not None:
-            props = rpc("Player.GetProperties", {"playerid": player, "properties": [
+            props = json_rpc("Player.GetProperties", {"playerid": player, "properties": [
                 "time", "totaltime", "speed", "live", "playlistid", "position"]})
-            item = (rpc("Player.GetItem", {"playerid": player, "properties": ["title", "art"]}) or {}).get("item", {})
+            item = (json_rpc("Player.GetItem", {"playerid": player, "properties": ["title", "art"]})
+                    or {}).get("item", {})
             title = item.get("title") or item.get("label") or ""
             result = {
                 "state": "playing" if props.get("speed") else "paused",
@@ -91,7 +83,7 @@ class KodiBackend:
             source = playback_diag.last_source()
             if source and source.get("title") == title:
                 result.update(source=source.get("source"), site=source.get("site"))
-        size = (rpc("Playlist.GetProperties", {"playlistid": VIDEO_PLAYLIST, "properties": ["size"]}) or {})
+        size = (json_rpc("Playlist.GetProperties", {"playlistid": VIDEO_PLAYLIST, "properties": ["size"]}) or {})
         result["queue_size"] = size.get("size", 0)
         if request:
             result["request"] = request_state.peek(request) or "pending"
@@ -115,27 +107,27 @@ class KodiBackend:
         if player is None:
             raise ValueError("nothing is playing")
         if action in ("pause", "resume"):
-            rpc("Player.PlayPause", {"playerid": player, "play": action == "resume"})
+            json_rpc("Player.PlayPause", {"playerid": player, "play": action == "resume"})
         elif action == "stop":
-            rpc("Player.Stop", {"playerid": player})
+            json_rpc("Player.Stop", {"playerid": player})
         elif action in ("next", "previous"):
-            rpc("Player.GoTo", {"playerid": player, "to": action})
+            json_rpc("Player.GoTo", {"playerid": player, "to": action})
         elif action == "seek":
             if seconds is None:
                 raise ValueError("seek needs seconds")
-            rpc("Player.Seek", {"playerid": player, "value": {"time": _time(seconds)}})
+            json_rpc("Player.Seek", {"playerid": player, "value": {"time": _time(seconds)}})
         else:
             raise ValueError("unknown action {!r}".format(action))
         log.info("control: %s%s", action, " {:.0f} s".format(float(seconds)) if action == "seek" else "")
         return {}
 
     def queue(self):
-        items = (rpc("Playlist.GetItems", {"playlistid": VIDEO_PLAYLIST, "properties": ["title"],
+        items = (json_rpc("Playlist.GetItems", {"playlistid": VIDEO_PLAYLIST, "properties": ["title"],
                                            "limits": {"start": 0, "end": 500}}) or {}).get("items") or []
         player = self._video_player()
         position = -1
         if player is not None:
-            props = rpc("Player.GetProperties", {"playerid": player, "properties": ["playlistid", "position"]})
+            props = json_rpc("Player.GetProperties", {"playerid": player, "properties": ["playlistid", "position"]})
             if props.get("playlistid") == VIDEO_PLAYLIST:
                 position = props.get("position", -1)
         return {"items": [item.get("title") or item.get("label") or "" for item in items], "position": position}
@@ -145,9 +137,9 @@ class KodiBackend:
             raise ValueError("index must be a position in the queue")
         player = self._video_player()
         if player is not None:
-            rpc("Player.GoTo", {"playerid": player, "to": index})
+            json_rpc("Player.GoTo", {"playerid": player, "to": index})
         else:
-            rpc("Player.Open", {"item": {"playlistid": VIDEO_PLAYLIST, "position": index}})
+            json_rpc("Player.Open", {"item": {"playlistid": VIDEO_PLAYLIST, "position": index}})
         return {}
 
 
@@ -181,11 +173,7 @@ def _load_state():
 def new_pin(write_settings=True):
     """A fresh PIN and secret: every browser has to enter the new PIN."""
     state = {"pin": "{:06d}".format(random.SystemRandom().randrange(1000000)), "secret": secrets.token_hex(16)}
-    path = _state_path()
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".web-")
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        json.dump(state, handle)
-    os.replace(tmp, path)
+    fileutil.write_json_atomic(_state_path(), state)
     if write_settings:
         # Changing the shown PIN is a settings change: the service picks the
         # new one up in onSettingsChanged.
@@ -207,8 +195,8 @@ def _write(setting, value):
 
 
 def _address(port):
-    ip = xbmc.getIPAddress()
-    return "http://{}:{}".format(ip, port) if ip and ip not in ("127.0.0.1", "0.0.0.0") else ""
+    ip = kodiutil.network_address()
+    return "http://{}:{}".format(ip, port) if ip else ""
 
 
 class WebController:

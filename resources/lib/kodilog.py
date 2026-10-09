@@ -13,8 +13,7 @@ import xbmc
 import xbmcaddon
 
 from . import diag
-
-ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
+from .kodiutil import ADDON_ID
 
 _LEVELS = {
     logging.DEBUG: xbmc.LOGDEBUG,
@@ -24,6 +23,11 @@ _LEVELS = {
     logging.ERROR: xbmc.LOGERROR,
     logging.CRITICAL: xbmc.LOGFATAL,
 }
+
+
+def log(message, level=xbmc.LOGINFO):
+    """A line logged whatever the Diagnostics switches say: summaries, warnings, errors."""
+    xbmc.log("[{}] {}".format(ADDON_ID, message), level)
 
 
 class KodiLogHandler(logging.Handler):

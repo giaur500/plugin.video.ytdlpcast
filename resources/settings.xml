@@ -207,6 +207,112 @@
                     <default>true</default>
                     <control type="toggle"/>
                 </setting>
+                <setting id="subtitles_language" type="string" label="30143" help="30144">
+                    <level>0</level>
+                    <dependencies>
+                        <dependency type="enable" setting="subtitles_enabled">true</dependency>
+                    </dependencies>
+                    <default>system</default>
+                    <constraints>
+                        <options>
+                            <option label="30147">system</option>
+                            <option label="30300">ar</option>
+                            <option label="30301">bg</option>
+                            <option label="30302">ca</option>
+                            <option label="30303">zh</option>
+                            <option label="30304">hr</option>
+                            <option label="30305">cs</option>
+                            <option label="30306">da</option>
+                            <option label="30307">nl</option>
+                            <option label="30308">en</option>
+                            <option label="30309">et</option>
+                            <option label="30310">fi</option>
+                            <option label="30311">fr</option>
+                            <option label="30312">de</option>
+                            <option label="30313">el</option>
+                            <option label="30314">he</option>
+                            <option label="30315">hi</option>
+                            <option label="30316">hu</option>
+                            <option label="30317">id</option>
+                            <option label="30318">it</option>
+                            <option label="30319">ja</option>
+                            <option label="30320">ko</option>
+                            <option label="30321">lv</option>
+                            <option label="30322">lt</option>
+                            <option label="30323">no</option>
+                            <option label="30324">fa</option>
+                            <option label="30325">pl</option>
+                            <option label="30326">pt</option>
+                            <option label="30327">ro</option>
+                            <option label="30328">ru</option>
+                            <option label="30329">sr</option>
+                            <option label="30330">sk</option>
+                            <option label="30331">sl</option>
+                            <option label="30332">es</option>
+                            <option label="30333">sv</option>
+                            <option label="30334">th</option>
+                            <option label="30335">tr</option>
+                            <option label="30336">uk</option>
+                            <option label="30337">vi</option>
+                        </options>
+                    </constraints>
+                    <control type="list" format="string">
+                        <heading>30143</heading>
+                    </control>
+                </setting>
+                <setting id="subtitles_fallback" type="string" label="30145" help="30146">
+                    <level>0</level>
+                    <dependencies>
+                        <dependency type="enable" setting="subtitles_enabled">true</dependency>
+                    </dependencies>
+                    <default>en</default>
+                    <constraints>
+                        <options>
+                            <option label="30148">none</option>
+                            <option label="30300">ar</option>
+                            <option label="30301">bg</option>
+                            <option label="30302">ca</option>
+                            <option label="30303">zh</option>
+                            <option label="30304">hr</option>
+                            <option label="30305">cs</option>
+                            <option label="30306">da</option>
+                            <option label="30307">nl</option>
+                            <option label="30308">en</option>
+                            <option label="30309">et</option>
+                            <option label="30310">fi</option>
+                            <option label="30311">fr</option>
+                            <option label="30312">de</option>
+                            <option label="30313">el</option>
+                            <option label="30314">he</option>
+                            <option label="30315">hi</option>
+                            <option label="30316">hu</option>
+                            <option label="30317">id</option>
+                            <option label="30318">it</option>
+                            <option label="30319">ja</option>
+                            <option label="30320">ko</option>
+                            <option label="30321">lv</option>
+                            <option label="30322">lt</option>
+                            <option label="30323">no</option>
+                            <option label="30324">fa</option>
+                            <option label="30325">pl</option>
+                            <option label="30326">pt</option>
+                            <option label="30327">ro</option>
+                            <option label="30328">ru</option>
+                            <option label="30329">sr</option>
+                            <option label="30330">sk</option>
+                            <option label="30331">sl</option>
+                            <option label="30332">es</option>
+                            <option label="30333">sv</option>
+                            <option label="30334">th</option>
+                            <option label="30335">tr</option>
+                            <option label="30336">uk</option>
+                            <option label="30337">vi</option>
+                        </options>
+                    </constraints>
+                    <control type="list" format="string">
+                        <heading>30145</heading>
+                    </control>
+                </setting>
             </group>
         </category>
         <category id="ytdlp" label="30160">

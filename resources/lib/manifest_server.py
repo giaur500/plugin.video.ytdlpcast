@@ -12,10 +12,9 @@ desktop. service.py is the thin Kodi wrapper around it.
 """
 
 import os
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 
-from . import diag
+from . import diag, httpserve
 
 log = diag.logger("manifest.server")
 
@@ -76,34 +75,13 @@ class _Handler(BaseHTTPRequestHandler):
             log.info("%s %s", self.address_string(), format % args)
 
 
-class ManifestServer:
-    """Owns the listening socket and the thread that serves it."""
+class ManifestServer(httpserve.ServerThread):
+    """The loopback server for one directory of manifests."""
 
     def __init__(self, root, port, host="127.0.0.1"):
+        super().__init__(_Handler, host, port, "ytdlpcast-manifests", root=root)
         self.root = root
-        self.port = port
-        self.host = host
-        self._httpd = None
-        self._thread = None
 
     @property
     def base_url(self):
         return "http://{}:{}".format(self.host, self.port)
-
-    def start(self):
-        """Bind and serve in a daemon thread. Raises OSError if the port is taken."""
-        self._httpd = ThreadingHTTPServer((self.host, self.port), _Handler)
-        self._httpd.root = self.root
-        self._httpd.daemon_threads = True
-        self._thread = threading.Thread(
-            target=self._httpd.serve_forever, name="ytdlpcast-manifests", daemon=True)
-        self._thread.start()
-
-    def stop(self):
-        if self._httpd is None:
-            return
-        self._httpd.shutdown()
-        self._httpd.server_close()
-        self._thread.join(timeout=5)
-        self._httpd = None
-        self._thread = None

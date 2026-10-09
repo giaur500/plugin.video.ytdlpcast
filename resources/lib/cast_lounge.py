@@ -15,17 +15,15 @@ transport, scripts/cast-harness.py against YouTube itself.
 import codecs
 import http.client
 import json
-import os
 import random
 import socket
 import ssl
-import tempfile
 import threading
 import time
 import urllib.parse
 import uuid
 
-from . import cast_protocol, diag
+from . import cast_protocol, diag, fileutil
 
 log = diag.logger("cast.lounge")
 raw = diag.logger("cast.raw")
@@ -112,13 +110,9 @@ class Identity:
         return identity
 
     def save(self):
-        # Write-then-rename, as ytdlp_loader does: the plugin reads this file
-        # (TV code) while the service may be writing it.
-        directory = os.path.dirname(self.path) or "."
-        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".cast-")
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump({field: getattr(self, field) for field in self.FIELDS}, handle, indent=1, sort_keys=True)
-        os.replace(tmp, self.path)
+        # Atomic: the plugin reads this file (TV code) while the service may be writing it.
+        fileutil.write_json_atomic(self.path, {field: getattr(self, field) for field in self.FIELDS},
+                                   indent=1, sort_keys=True)
 
     def token_due(self, now_ms=None):
         now_ms = now_ms if now_ms is not None else int(time.time() * 1000)

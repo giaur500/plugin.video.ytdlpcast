@@ -13,11 +13,7 @@ that nonce, so two requests in flight never overwrite each other:
 
 import uuid
 
-import xbmcaddon
-import xbmcgui
-
-ADDON_ID = xbmcaddon.Addon().getAddonInfo("id")
-HOME = xbmcgui.Window(10000)
+from .kodiutil import ADDON_ID, HOME
 
 
 def new_nonce():

@@ -9,7 +9,8 @@ is_running() and launch(), which the DIAL server calls and which only read.
 
 player must provide play(video_id, seconds), pause(), resume(), stop(),
 seek(seconds), status() -> (state, position, duration), volume() ->
-(level, muted), set_volume(level, muted) and notify(text, kind).
+(level, muted), set_volume(level, muted) and notify(phone_name, event), event
+being "connected" or "disconnected".
 """
 
 import http.client
