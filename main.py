@@ -22,6 +22,7 @@ import json
 import os
 import sys
 import time
+import traceback
 import urllib.parse
 
 import xbmc
@@ -30,7 +31,7 @@ import xbmcgui
 import xbmcplugin
 
 from resources.lib import (cast_kodi, diag, kodilog, kodiutil, paths, playback_diag, request_state, resolver,
-                           stream_prep, web_kodi, ytdlp_info, ytdlp_loader)
+                           stream_prep, subinterp, web_kodi, ytdlp_info, ytdlp_loader)
 from resources.lib.kodilog import log
 from resources.lib.kodiutil import ADDON_ID
 
@@ -133,8 +134,12 @@ def extract(url, switches, flat_playlists=False):
     try:
         info = resolver.extract(url, logger=YtdlpLog(), verbose=verbose, flat_playlists=flat_playlists)
     except Exception as error:
-        log("extraction failed after {:.1f} s: {}: {}".format(
-            time.monotonic() - started, type(error).__name__, error), xbmc.LOGERROR)
+        from yt_dlp.utils import YoutubeDLError
+        # yt-dlp's own errors say what went wrong; anything else is a bug
+        # somewhere, and only the traceback says where.
+        trace = "" if isinstance(error, YoutubeDLError) else "\n" + traceback.format_exc().rstrip()
+        log("extraction failed after {:.1f} s: {}: {}{}".format(
+            time.monotonic() - started, type(error).__name__, error, trace), xbmc.LOGERROR)
         raise
     if resolver.is_playlist(info):
         what = "playlist"
@@ -158,6 +163,10 @@ def prepare_ytdlp():
     passed validation, but validation is static -- the copy shipped inside the
     add-on is used instead, so a bad download cannot stop playback.
     """
+    if subinterp.repair_strptime():
+        # Before yt-dlp is imported: its own "from datetime import ..." must see the repair.
+        resolve_log.info("datetime.strptime was broken in this Kodi process (Python 3.11, left so by an "
+                         "ended interpreter); repaired for this call")
     store = paths.ytdlp_directory()
     started = time.monotonic()
     version, source = ytdlp_loader.activate(store, paths.bundled_ytdlp())

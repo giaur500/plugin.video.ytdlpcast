@@ -24,8 +24,8 @@ import time
 import xbmc
 import xbmcaddon
 
-from resources.lib import (cast_kodi, diag, kodilog, kodiutil, manifest_server, paths, playback_diag, web_kodi,
-                           ytdlp_info, ytdlp_loader)
+from resources.lib import (cast_kodi, diag, kodilog, kodiutil, manifest_server, paths, playback_diag, subinterp,
+                           web_kodi, ytdlp_info, ytdlp_loader)
 from resources.lib.kodilog import log
 from resources.lib.kodiutil import ADDON_ID
 
@@ -62,6 +62,13 @@ class Service(xbmc.Monitor):
         super().__init__()
         started = time.monotonic()
         self.switches = kodilog.apply()
+        # Python 3.11 keeps the _strptime of whichever interpreter first calls
+        # datetime.strptime; this one lives as long as Kodi (subinterp docstring).
+        if subinterp.pin_strptime():
+            service_log.info("datetime.strptime works in this Kodi process")
+        else:
+            log("datetime.strptime is already broken in this Kodi process (Python 3.11, left so by an ended "
+                "interpreter); the plugin repairs it for each call", xbmc.LOGWARNING)
         try:
             # A copy downloaded by an older version still carries \\N{} escapes,
             # which crash Kodi 21's Python once decoded (ytdlp_loader docstring).

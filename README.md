@@ -190,6 +190,14 @@ downloads that file, checks it, and puts it on `sys.path`.
   Kodi ends that interpreter after the plugin call, and the next `\N{}` anywhere in Kodi then
   crashed it.
   Python 3.12 fixed this; until Kodi ships it, no `\N{}` is ever decoded here.
+* **`datetime.strptime` across calls**: Python 3.11 also keeps, process-wide, the `_strptime`
+  module of the first interpreter that calls `datetime.strptime`. Once Kodi ends that
+  interpreter the module is emptied, and every later `strptime` anywhere in Kodi raises
+  `'NoneType' object is not callable` — yt-dlp calls it for every video with an upload date, so
+  only the first resolve after a restart worked. The service calls it first, from an
+  interpreter that lives as long as Kodi; should another add-on have got there first, the
+  plugin gives its own interpreter a `datetime` whose `strptime` uses its own `_strptime`.
+  Some boxes never showed this: a long-lived service of theirs happened to call it first.
 * **Storage**: `addon_data/plugin.video.ytdlpcast/ytdlp/`, one archive per version, never
   overwritten in place (zipimport caches a ZIP's directory per path), current and previous
   kept, plus the compiled directories of the copy in use and of the bundled one. The copy
