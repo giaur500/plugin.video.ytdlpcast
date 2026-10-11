@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="plugin.video.ytdlpcast"
        name="yt-dlp Cast"
-       version="2.4.1"
+       version="2.5.0"
        provider-name="michal">
 
     <requires>
@@ -20,7 +20,11 @@
         <summary lang="pl_PL">Przesyłaj YouTube z telefonu do Kodi, odtwarzane przez yt-dlp</summary>
         <description lang="en_GB">Kodi shows up as a TV in the YouTube app: pick it from the cast menu, or link it once with a TV code. Every video is resolved by yt-dlp, which the add-on keeps current by itself, and played by InputStream Adaptive from YouTube's HLS manifest -- streamed, with seeking and quality switching, nothing downloaded first. No other add-on is needed for casting. An optional web interface plays any link yt-dlp supports -- YouTube, Dailymotion, Facebook, archive.org and many more, whole playlists as a queue -- shows what is playing with a seek bar, and the add-on's log.</description>
         <description lang="pl_PL">Kodi pojawia się jako telewizor w aplikacji YouTube: wybierz go w menu przesyłania albo połącz raz kodem TV. Każdy film rozwiązuje yt-dlp, który dodatek sam aktualizuje, a odtwarza InputStream Adaptive z manifestu HLS YouTube -- strumieniowo, z przewijaniem i zmianą jakości, bez wcześniejszego pobierania. Do przesyłania nie jest potrzebny żaden inny dodatek. Opcjonalny interfejs WWW odtwarza dowolny link obsługiwany przez yt-dlp -- YouTube, Dailymotion, Facebook, archive.org i wiele innych, całe playlisty jako kolejkę -- pokazuje, co gra, z suwakiem przewijania, oraz log wtyczki.</description>
-        <news>v2.4.1
+        <news>v2.5.0
+- Subtitles: YouTube's own subtitle list is removed from the stream: Kodi offers the add-on's one track instead of two dozen, and InputStream Adaptive no longer floods YouTube with subtitle requests that got the address blocked
+- After YouTube refuses a subtitle request (429) no subtitles are asked for for 30 minutes; YouTube's subtitle list is removed even with manifest rewriting switched off, and without the service's manifest server the plugin serves the manifest itself
+- When the author added no subtitles, YouTube's automatic captions in the video's own language are used (new setting, on by default); machine translations never, YouTube refuses them outside a browser
+v2.4.1
 - Fixed: every resolve after the first since Kodi started failed with "'NoneType' object is not callable", on any site (seen on Android TV). Python 3.11 keeps datetime.strptime's module from the first interpreter that used it; the service now pins it, and the plugin repairs it when another add-on got there first
 - An extraction failing on something other than yt-dlp's own error logs its traceback
 v2.4.0

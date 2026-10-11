@@ -422,6 +422,26 @@ def _drop_auto_dubbed(entries):
     return [entry for entry in entries if id(entry) not in doomed], True
 
 
+def _drop_subtitle_renditions(entries):
+    """Remove YouTube's own subtitle renditions and every variant's SUBTITLES= link.
+
+    The add-on hands Kodi one subtitle file of its own. Left in, YouTube's
+    renditions (two dozen languages, machine translations among them) crowd
+    Kodi's subtitle menu, and the one picked is fetched by InputStream Adaptive
+    from timedtext -- which answers it 429 and gets a retry every second, the
+    whole film long, until YouTube refuses this address our own track too.
+    """
+    kept = [entry for entry in entries
+            if not (entry["kind"] == "media" and entry["attrs"].get("TYPE") == "SUBTITLES")]
+    changed = len(kept) != len(entries)
+    for entry in kept:
+        if entry["kind"] == "variant" and "SUBTITLES" in entry["attrs"]:
+            entry["lines"][0] = re.sub(r',SUBTITLES="[^"]*"', "", entry["lines"][0])
+            del entry["attrs"]["SUBTITLES"]
+            changed = True
+    return kept, changed
+
+
 def _ensure_default(entries):
     """Give every audio group a DEFAULT track when the manifest provides none.
 
@@ -486,13 +506,25 @@ def filter_manifest(text, max_height=0, video_codec=VIDEO_AUTO,
     if drop_auto_dubbed:
         step("drop auto-dubbed audio", _drop_auto_dubbed(entries))
     step("default audio track", _ensure_default(entries))
+    step("drop subtitle renditions", _drop_subtitle_renditions(entries))
 
-    if not changed:
-        return text, False
+    return (_rebuild(entries, text), True) if changed else (text, False)
+
+
+def strip_subtitle_renditions(text):
+    """Only drop YouTube's subtitle renditions, nothing else: (text, changed).
+
+    For when the other rewrites are switched off -- the renditions go anyway,
+    because what InputStream Adaptive does with them gets the address blocked
+    (_drop_subtitle_renditions).
+    """
+    entries, changed = _drop_subtitle_renditions(_parse(text))
+    return (_rebuild(entries, text), True) if changed else (text, False)
+
+
+def _rebuild(entries, original):
     rebuilt = "\n".join(line for entry in entries for line in entry["lines"])
-    if text.endswith("\n"):
-        rebuilt += "\n"
-    return rebuilt, True
+    return rebuilt + "\n" if original.endswith("\n") else rebuilt
 
 
 # ---------------------------------------------------------------------------
@@ -525,18 +557,46 @@ def _subtitle_file(tracks):
     return None
 
 
-def pick_subtitles(info, languages):
-    """[(language, url, ext)] to try in order until one downloads; each track once.
+def _translated(url):
+    """True for a machine translation: timedtext with tlang, which YouTube refuses
+    (HTTP 429) to anything but a browser -- yt-dlp itself marks every subtitle
+    track for browser impersonation, which Kodi cannot do."""
+    return "tlang" in urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+
+
+def _automatic_original(info, languages):
+    """(code, language, url, ext) of YouTube's automatic captions in the video's own
+    language, or None.
+
+    Those are what YouTube's page shows as "(auto-generated)" when the author
+    added nothing, and they download as readily as the author's own tracks;
+    only translations are refused. yt-dlp names the original "<lang>-orig".
+    The video's language first, then the wanted ones, then whichever there is.
+    """
+    originals = {}  # language -> (code, language, url, ext), "-orig" preferred
+    for code, tracks in (info.get("automatic_captions") or {}).items():
+        found = _subtitle_file(tracks or ())
+        if not found or _translated(found[0]):
+            continue
+        language = _primary_language(code[:-len("-orig")] if code.endswith("-orig") else code)
+        if language not in originals or code.endswith("-orig"):
+            originals[language] = (code, language) + found
+    for wanted in [info.get("language")] + list(languages):
+        if _primary_language(wanted) in originals:
+            return originals[_primary_language(wanted)]
+    return next(iter(originals.values()), None)
+
+
+def pick_subtitles(info, languages, automatic=False):
+    """[(language, url, ext, automatic)] to try in order until one downloads; each track once.
 
     For every wanted language (ISO 639-1 codes, most wanted first) the track
     the uploader provided in it -- the plain code before a regional one, "en"
-    before "en-GB" -- then the first track the video has, in yt-dlp's order,
-    whatever its language.
+    before "en-GB"; then, with automatic, YouTube's automatic captions in the
+    video's own language; then the first track the uploader provided, in
+    yt-dlp's order, whatever its language.
 
-    Only info["subtitles"] is considered -- the author's own tracks. YouTube's
-    automatic_captions are machine output, and the translated ones among them
-    are unusable anyway: that endpoint demands browser TLS impersonation and
-    answers HTTP 429 to everything else, including yt-dlp itself.
+    Machine translations are never tried (_translated).
     """
     usable = []  # (code, language, url, ext), in yt-dlp's order
     for code, tracks in (info.get("subtitles") or {}).items():
@@ -546,13 +606,16 @@ def pick_subtitles(info, languages):
     ordered = []
     for wanted in languages:
         matches = [track for track in usable if track[1] == _primary_language(wanted)]
-        ordered.extend(sorted(matches, key=lambda track: "-" in track[0])[:1])
-    ordered.extend(usable[:1])
+        ordered.extend((track, False) for track in sorted(matches, key=lambda track: "-" in track[0])[:1])
+    original = _automatic_original(info, languages) if automatic else None
+    if original:
+        ordered.append((original, True))
+    ordered.extend((track, False) for track in usable[:1])
     candidates, seen = [], set()
-    for code, language, url, ext in ordered:
-        if code not in seen:
-            seen.add(code)
-            candidates.append((language, url, ext))
+    for (code, language, url, ext), machine in ordered:
+        if (code, machine) not in seen:
+            seen.add((code, machine))
+            candidates.append((language, url, ext, machine))
     return candidates
 
 

@@ -123,7 +123,7 @@ msgid "Download subtitles"
 msgstr ""
 
 msgctxt "#30142"
-msgid "Downloads one subtitle track the video's author uploaded, as a file Kodi labels by language: in the subtitle language, else in the fallback language, else the first track the video has. YouTube's automatic captions are not used: they are machine output, and the translated ones require browser TLS impersonation that no Kodi add-on can provide."
+msgid "Downloads one subtitle track, as a file Kodi labels by language: the one the video's author uploaded in the subtitle language, else in the fallback language; else, if allowed below, YouTube's automatic captions in the video's own language; else the first track the author uploaded. YouTube's own subtitle list is left out of the stream, so Kodi offers just this track."
 msgstr ""
 
 msgctxt "#30143"
@@ -160,7 +160,7 @@ msgid "Rewrite YouTube's manifest (enables the settings below)"
 msgstr ""
 
 msgctxt "#30151"
-msgid "YouTube only: videos from other sites always play with their manifest as published, whatever is set here — the rewrite fixes YouTube's own quirks, which other sites do not have. The settings below work by rewriting YouTube's HLS master playlist and serving the copy from 127.0.0.1 to InputStream Adaptive. Switch this off to hand over YouTube's manifest untouched, exactly as version 1.0 did — no rewriting, no local server."
+msgid "YouTube only: videos from other sites always play with their manifest as published, whatever is set here — the rewrite fixes YouTube's own quirks, which other sites do not have. The settings below work by rewriting YouTube's HLS master playlist and serving the copy from 127.0.0.1 to InputStream Adaptive. Switch this off to hand over YouTube's manifest as published, with one exception: YouTube's own subtitle list is still removed, because InputStream Adaptive fetching those subtitles gets the address blocked."
 msgstr ""
 
 msgctxt "#30152"
@@ -184,7 +184,7 @@ msgid "Local manifest server port"
 msgstr ""
 
 msgctxt "#30157"
-msgid "Rewritten manifests are served to InputStream Adaptive from 127.0.0.1 on this port. Change it only if another add-on already uses it (plugin.video.youtube uses 50152); the server restarts on its own."
+msgid "Rewritten manifests are served to InputStream Adaptive from 127.0.0.1 on this port. Change it only if another add-on already uses it (plugin.video.youtube uses 50152); the server restarts on its own. While it cannot be reached, each playback serves its manifest itself, on a port the system picks."
 msgstr ""
 
 msgctxt "#30160"
@@ -710,4 +710,12 @@ msgstr ""
 
 msgctxt "#30337"
 msgid "Vietnamese"
+msgstr ""
+
+msgctxt "#30258"
+msgid "Automatic captions when the author added none"
+msgstr ""
+
+msgctxt "#30259"
+msgid "YouTube's automatic captions in the video's own language, the ones its page shows as auto-generated. Their machine translations are never used: YouTube refuses them to anything but a web browser."
 msgstr ""

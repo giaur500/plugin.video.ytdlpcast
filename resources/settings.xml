@@ -313,6 +313,14 @@
                         <heading>30145</heading>
                     </control>
                 </setting>
+                <setting id="subtitles_automatic" type="boolean" label="30258" help="30259">
+                    <level>0</level>
+                    <default>true</default>
+                    <dependencies>
+                        <dependency type="enable" setting="subtitles_enabled">true</dependency>
+                    </dependencies>
+                    <control type="toggle"/>
+                </setting>
             </group>
         </category>
         <category id="ytdlp" label="30160">

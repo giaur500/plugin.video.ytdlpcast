@@ -24,6 +24,7 @@ import xbmcvfs
 
 from . import diag, manifest_server, mp4index, paths, resolver
 from .kodilog import log
+from .kodiutil import ADDON_ID, HOME
 
 manifest_log = diag.logger("manifest")
 subtitles_log = diag.logger("subtitles")
@@ -33,6 +34,17 @@ AUDIO_MODE_FMP4, AUDIO_MODE_AS_PUBLISHED = 0, 1
 
 # The manifest, the head of the fMP4 audio file, the subtitles.
 WORKERS = 3
+
+# When the service's manifest server does not answer, this plugin call serves
+# the manifest itself, until InputStream Adaptive has fetched it or this long.
+STANDBY_SECONDS = 30
+_standby = None  # {"server", "names", "served"}: see release_standby
+
+# A 429 to a subtitle request is YouTube refusing this address for a while
+# (Google's "Sorry..." page); every further request only feeds the block. So
+# none is made for this long -- across plugin calls, hence a window property.
+REFUSED_PROPERTY = ADDON_ID + ".subtitles.refused"
+COOLDOWN_SECONDS = 30 * 60
 
 
 def prepare(addon, info, stream, headers, kind, video_id):
@@ -59,7 +71,7 @@ def prepare(addon, info, stream, headers, kind, video_id):
         served_locally = False
         if job:
             stream, served_locally = _finish_rewrite(addon, job, stream, name)
-        subtitle = _finish_subtitles(subtitles, name)
+        subtitle = _finish_subtitles(subtitles, name, resolver.is_youtube(info))
     return stream, served_locally, subtitle
 
 
@@ -84,6 +96,53 @@ def fetch_head(url, headers, length=65535):
     return resolver.fetch(url, {**dict(headers or {}), "Range": "bytes=0-{}".format(length)}, timeout=15)
 
 
+def _start_standby(service_url):
+    """Serve this playback's manifest from the plugin call itself; its base URL, or None.
+
+    The service's server is not answering (its port taken, the service not
+    running). A loopback server on a port the system picks stands in until
+    release_standby, which the plugin calls once the item went to Kodi.
+    """
+    global _standby
+    server = manifest_server.ManifestServer(paths.manifest_directory(), 0)
+    served = set()
+    server.set(served=served)
+    try:
+        server.start()
+    except OSError as error:
+        log("manifest server not reachable at {} and none could be started here ({}); playing the manifest "
+            "as published".format(service_url, error), xbmc.LOGWARNING)
+        return None
+    _standby = {"server": server, "names": set(), "served": served}
+    log("manifest server not reachable at {}; this playback's manifest is served by the plugin itself at {}"
+        .format(service_url, server.base_url), xbmc.LOGWARNING)
+    return server.base_url
+
+
+def release_standby(wait=True, timeout=STANDBY_SECONDS):
+    """Stop the plugin's own manifest server, if this call started one.
+
+    With wait, first until InputStream Adaptive has fetched every playlist it
+    serves -- the master, the fMP4 audio -- or timeout. Called after the item
+    went to Kodi: Kodi starts playing then, while this call still runs.
+    """
+    global _standby
+    if _standby is None:
+        return
+    standby, _standby = _standby, None
+    missing = standby["names"] - standby["served"]
+    started = time.monotonic()
+    monitor = xbmc.Monitor()
+    while wait and missing and time.monotonic() - started < timeout and not monitor.waitForAbort(0.1):
+        missing = standby["names"] - standby["served"]
+    standby["server"].stop()
+    if wait and missing:
+        log("the plugin's manifest server stopped after {:.0f} s; never fetched: {}".format(
+            time.monotonic() - started, ", ".join(sorted(missing))), xbmc.LOGWARNING)
+    else:
+        manifest_log.info("the plugin's manifest server stopped after %.1f s", time.monotonic() - started)
+
+
 # ---------------------------------------------------------------------------
 # The manifest
 # ---------------------------------------------------------------------------
@@ -91,25 +150,32 @@ def fetch_head(url, headers, length=65535):
 class _Rewrite:
     """A rewrite under way: where it will be served, and the requests it waits for."""
 
-    def __init__(self, base_url, manifest, fmp4_wanted):
+    def __init__(self, base_url, manifest, fmp4_wanted, minimal):
         self.base_url = base_url
         self.manifest = manifest  # future: the master playlist's text
         self.fmp4_wanted = fmp4_wanted
+        self.minimal = minimal  # rewriting switched off: only YouTube's subtitle renditions go
         self.audio = None  # (url, language, future: the head of the file) of the fMP4 track
 
 
 def _start_rewrite(addon, pool, info, url, headers):
-    """Start the requests the rewrite needs; None when the manifest plays as published."""
-    if not addon.getSettingBool("rewrite_manifest"):
-        manifest_log.info("rewriting switched off: playing the manifest as published")
-        return None
+    """Start the requests the rewrite needs; None when the manifest plays as published.
+
+    With rewriting switched off YouTube's own subtitle renditions still go
+    (resolver.strip_subtitle_renditions), and nothing else changes. Without
+    the service's server this plugin call serves the manifest (_start_standby):
+    as published, InputStream Adaptive would get those renditions.
+    """
+    minimal = not addon.getSettingBool("rewrite_manifest")
+    if minimal:
+        manifest_log.info("rewriting switched off: only YouTube's subtitle renditions are removed")
     base_url = server_base_url(addon)
     if not server_alive(base_url):
-        log("manifest server not reachable at {}, playing the manifest as published"
-            .format(base_url), xbmc.LOGWARNING)
-        return None
+        base_url = _start_standby(base_url)
+        if not base_url:
+            return None
     job = _Rewrite(base_url, pool.submit(resolver.fetch_manifest, url, headers),
-                   addon.getSettingInt("audio_mode") == AUDIO_MODE_FMP4)
+                   not minimal and addon.getSettingInt("audio_mode") == AUDIO_MODE_FMP4, minimal)
     if job.fmp4_wanted:
         audio_url, audio_headers, language = resolver.pick_audio_fmp4(info)
         if audio_url:
@@ -142,25 +208,29 @@ def _finish_rewrite(addon, job, url, name):
             handle.write(text)
         manifest_log.info("original kept as %s", original)
 
-    # The fix for the packed-ADTS start-silence: replace the audio with the
-    # fMP4 track, read by the same reader as the video.
-    audio_name, language = _build_audio_playlist(job.audio, out_dir, name) if job.audio else (None, None)
-    # Without it YouTube's own audio stays, two groups of it and machine
-    # dubbing included: then at least one AAC-LC group, no dubbing, as the
-    # swap would have had it. "As published" leaves the audio alone.
-    fallback = job.fmp4_wanted and not audio_name
-    if fallback:
-        manifest_log.info("no fMP4 swap: one AAC-LC audio group, machine dubbing dropped")
-    text, changed = resolver.filter_manifest(
-        text,
-        max_height=addon.getSettingInt("max_height"),
-        video_codec=addon.getSettingInt("video_codec"),
-        quality=addon.getSettingInt("quality_mode"),
-        audio_codec=resolver.AUDIO_AAC_LC if fallback else resolver.AUDIO_AS_PUBLISHED,
-        drop_auto_dubbed=fallback)
-    if audio_name:
-        text = resolver.swap_audio_to_fmp4(text, "{}/{}".format(job.base_url, audio_name), language)
-        changed = True
+    if job.minimal:
+        audio_name = None
+        text, changed = resolver.strip_subtitle_renditions(text)
+    else:
+        # The fix for the packed-ADTS start-silence: replace the audio with the
+        # fMP4 track, read by the same reader as the video.
+        audio_name, language = _build_audio_playlist(job.audio, out_dir, name) if job.audio else (None, None)
+        # Without it YouTube's own audio stays, two groups of it and machine
+        # dubbing included: then at least one AAC-LC group, no dubbing, as the
+        # swap would have had it. "As published" leaves the audio alone.
+        fallback = job.fmp4_wanted and not audio_name
+        if fallback:
+            manifest_log.info("no fMP4 swap: one AAC-LC audio group, machine dubbing dropped")
+        text, changed = resolver.filter_manifest(
+            text,
+            max_height=addon.getSettingInt("max_height"),
+            video_codec=addon.getSettingInt("video_codec"),
+            quality=addon.getSettingInt("quality_mode"),
+            audio_codec=resolver.AUDIO_AAC_LC if fallback else resolver.AUDIO_AS_PUBLISHED,
+            drop_auto_dubbed=fallback)
+        if audio_name:
+            text = resolver.swap_audio_to_fmp4(text, "{}/{}".format(job.base_url, audio_name), language)
+            changed = True
 
     if not changed:
         manifest_log.info("nothing to rewrite: playing the manifest as published")
@@ -169,6 +239,8 @@ def _finish_rewrite(addon, job, url, name):
     master_name = name + ".m3u8"
     with xbmcvfs.File(os.path.join(out_dir, master_name), "w") as handle:
         handle.write(text)
+    if _standby is not None:
+        _standby["names"].update(n for n in (master_name, audio_name) if n)
     served = "{}/{}".format(job.base_url, master_name)
     if diag.enabled("manifest"):
         manifest_log.info("rewritten: %s", resolver.describe_variants(text))
@@ -225,45 +297,73 @@ def subtitle_languages(addon):
 def _start_subtitles(addon, pool, info):
     """Start looking for one subtitle track: (future of _fetch_first, candidates), or None.
 
-    The chosen language, then the fallback, then the first track the author
-    uploaded (resolver.pick_subtitles).
+    The author's track in the chosen language, then in the fallback, then --
+    when the settings allow -- YouTube's automatic captions in the video's own
+    language, then the first track the author uploaded (resolver.pick_subtitles).
     """
     if not addon.getSettingBool("subtitles_enabled"):
         subtitles_log.info("switched off in the settings")
         return None
+    refused = refused_at() if resolver.is_youtube(info) else None
+    if refused:
+        log("subtitles: not asked for: YouTube refused this address at {} (429); next try after {}".format(
+            _clock(refused), _clock(refused + COOLDOWN_SECONDS)))
+        return None
     languages = subtitle_languages(addon)
-    candidates = resolver.pick_subtitles(info, languages)
-    subtitles_log.info("uploaded by the author: %s; automatic captions (not used): %d languages; "
+    automatic = addon.getSettingBool("subtitles_automatic")
+    candidates = resolver.pick_subtitles(info, languages, automatic)
+    subtitles_log.info("uploaded by the author: %s; automatic captions: %d languages (%s); "
                        "wanted: %s, then the first track; trying: %s",
                        ", ".join(sorted(info.get("subtitles") or {})) or "none",
                        len(info.get("automatic_captions") or {}),
+                       "the original if the author added none" if automatic else "switched off",
                        ", ".join(languages) or "-",
-                       ", ".join(language for language, _, _ in candidates) or "nothing")
+                       ", ".join(_label(language, machine) for language, _, _, machine in candidates) or "nothing")
     return (pool.submit(_fetch_first, candidates), candidates) if candidates else None
 
 
+def refused_at():
+    """When YouTube last answered a subtitle request 429, if that is under COOLDOWN_SECONDS ago."""
+    try:
+        refused = float(HOME.getProperty(REFUSED_PROPERTY) or 0)
+    except ValueError:
+        refused = 0
+    if refused and time.time() - refused < COOLDOWN_SECONDS:
+        return refused
+    HOME.clearProperty(REFUSED_PROPERTY)
+    return None
+
+
+def _clock(seconds):
+    return time.strftime("%H:%M", time.localtime(seconds))
+
+
+def _label(language, automatic):
+    return language + (" (auto)" if automatic else "")
+
+
 def _fetch_first(candidates):
-    """(track, problems): track is (language, ext, bytes, seconds) of the first
-    candidate that downloads, or None; problems are (language, error) of the
-    ones that did not.
+    """(track, problems): track is (language, ext, automatic, bytes, seconds) of
+    the first candidate that downloads, or None; problems are (label, error) of
+    the ones that did not.
 
     A 429 ends the attempt: it is YouTube refusing this client, not one track,
     and every other request would get it too.
     """
     problems = []
-    for language, url, ext in candidates:
+    for language, url, ext, automatic in candidates:
         started = time.monotonic()
         try:
-            return (language, ext, resolver.fetch(url), time.monotonic() - started), problems
+            return (language, ext, automatic, resolver.fetch(url), time.monotonic() - started), problems
         except Exception as error:  # noqa: BLE001 - the next candidate may still work
-            problems.append((language, error))
+            problems.append((_label(language, automatic), error))
             if isinstance(error, urllib.error.HTTPError) and error.code == 429:
                 break
     return None, problems
 
 
-def _finish_subtitles(job, name):
-    """Save the track that arrived; (language, path), or None.
+def _finish_subtitles(job, name, youtube):
+    """Save the track that arrived; (language, path, automatic), or None.
 
     Kodi reads the language from the file name: CUtil::GetExternalStreamDetailsFromFilename
     strips the video's base name, splits the rest on " .-" and walks the tokens
@@ -277,15 +377,20 @@ def _finish_subtitles(job, name):
     for language, error in problems:
         log("subtitles: {} failed ({}: {}), skipping".format(
             language, type(error).__name__, error), xbmc.LOGWARNING)
+    refused = any(isinstance(error, urllib.error.HTTPError) and error.code == 429 for _, error in problems)
+    if refused and youtube:
+        HOME.setProperty(REFUSED_PROPERTY, str(time.time()))
+        log("subtitles: YouTube answered 429 Too Many Requests: no subtitle requests to it for {} min".format(
+            COOLDOWN_SECONDS // 60), xbmc.LOGWARNING)
     if track is None:
         untried = len(candidates) - len(problems)
         if untried:
-            log("subtitles: YouTube answered 429 Too Many Requests; {} more track(s) not tried".format(untried),
-                xbmc.LOGWARNING)
+            log("subtitles: {} more track(s) not tried after the 429".format(untried), xbmc.LOGWARNING)
         return None
-    language, ext, data, took = track
+    language, ext, automatic, data, took = track
     target = os.path.join(paths.manifest_directory(), "{}.{}.{}".format(name, language, ext))
     with xbmcvfs.File(target, "w") as handle:
         handle.write(data)
-    subtitles_log.info("%s: %d bytes in %.0f ms -> %s", language, len(data), took * 1000, os.path.basename(target))
-    return language, target
+    subtitles_log.info("%s: %d bytes in %.0f ms -> %s", _label(language, automatic), len(data), took * 1000,
+                       os.path.basename(target))
+    return language, target, automatic

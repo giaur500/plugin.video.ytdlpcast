@@ -39,15 +39,18 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path == HEALTH_PATH:
             return self._respond(200, b"ok", "text/plain", send_body)
 
-        body = self._read_manifest()
-        if body is None:
-            return self._respond(404, b"not found", "text/plain", send_body)
-        self._respond(200, body, MANIFEST_MIME, send_body)
-
-    def _read_manifest(self):
         # Only the last path component counts, so "../" and subdirectories can
         # never reach outside the manifest directory.
         name = os.path.basename(self.path.split("?", 1)[0])
+        body = self._read_manifest(name)
+        if body is None:
+            return self._respond(404, b"not found", "text/plain", send_body)
+        self._respond(200, body, MANIFEST_MIME, send_body)
+        served = getattr(self.server, "served", None)
+        if served is not None and send_body:
+            served.add(name)  # the plugin's own server waits for these (stream_prep.release_standby)
+
+    def _read_manifest(self, name):
         if not name.endswith(MANIFEST_EXTENSION) or name in ("", MANIFEST_EXTENSION):
             return None
         path = os.path.join(self.server.root, name)

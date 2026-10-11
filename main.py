@@ -267,20 +267,27 @@ def resolve_item(params, switches):
         warn_if_isa_disabled()
     video = video_id or info.get("id")
     stream, served_locally, subtitle = stream_prep.prepare(ADDON, info, stream, headers, kind, video)
+    resolved = False
+    try:
+        # A link with ?t=… starts there, unless the caller asked for a position.
+        if not seek and info.get("start_time"):
+            seek = as_seconds(info.get("start_time"))
+        item = _list_item(info, stream, headers, kind, served_locally, subtitle[1] if subtitle else None, seek)
 
-    # A link with ?t=… starts there, unless the caller asked for a position.
-    if not seek and info.get("start_time"):
-        seek = as_seconds(info.get("start_time"))
-    item = _list_item(info, stream, headers, kind, served_locally, subtitle[1] if subtitle else None, seek)
-
-    log("play {} ({}): yt-dlp {} ({}), {}, manifest {}, subtitles {}, seek {}s, ready in {:.1f} s".format(
-        video, info.get("extractor_key") or "?", ytdlp_version, ytdlp_source, kind,
-        "rewritten" if served_locally else ("as published" if kind in ("HLS", "DASH") else "-"),
-        subtitle[0] if subtitle else "-", seek, time.monotonic() - STARTED))
-    playback_diag.mark_playing(video, kind, served_locally, source=params.get("url") or url,
-                               site=info.get("extractor_key"), title=info.get("title") or "")
-    report("ok")
-    xbmcplugin.setResolvedUrl(HANDLE, True, item)
+        log("play {} ({}): yt-dlp {} ({}), {}, manifest {}, subtitles {}, seek {}s, ready in {:.1f} s".format(
+            video, info.get("extractor_key") or "?", ytdlp_version, ytdlp_source, kind,
+            "rewritten" if served_locally else ("as published" if kind in ("HLS", "DASH") else "-"),
+            (subtitle[0] + (" (auto)" if subtitle[2] else "")) if subtitle else "-", seek,
+            time.monotonic() - STARTED))
+        playback_diag.mark_playing(video, kind, served_locally, source=params.get("url") or url,
+                                   site=info.get("extractor_key"), title=info.get("title") or "")
+        report("ok")
+        xbmcplugin.setResolvedUrl(HANDLE, True, item)
+        resolved = True
+    finally:
+        # Kodi plays as soon as it has the item; a manifest this call serves
+        # itself (the service's server not answering) is still to be fetched.
+        stream_prep.release_standby(wait=resolved)
 
 
 def manifest_type_reason():

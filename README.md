@@ -321,15 +321,17 @@ failed, nothing changed — the add-on hands over YouTube's original URL, exactl
 
 ### Subtitles
 
-* **Download subtitles** — on by default. Downloads **one** subtitle track the video's
-  **author uploaded**, as `<video id>.<lang>.srt` (or `.vtt`) in Kodi's temp directory, handed
-  to the player with `setSubtitles()`.
+* **Download subtitles** — on by default. Downloads **one** subtitle track, as
+  `<video id>.<lang>.srt` (or `.vtt`) in Kodi's temp directory, handed to the player with
+  `setSubtitles()`.
 * **Subtitle language** — *Kodi's interface language* (default) or one of 38 languages.
 * **Fallback language** — *English* (default), another language, or *None*.
+* **Automatic captions when the author added none** — on by default.
 
-The track is the one in the subtitle language; when the video has none, the one in the
-fallback language; **when it has neither, the first track the author uploaded**, whatever its
-language — the settings' help says so too. A track that fails to download is replaced by the
+The track is the author's in the subtitle language; when the video has none, the author's in
+the fallback language; then YouTube's **automatic captions in the video's own language** —
+the ones its page shows as *auto-generated*, which is all most videos have; **then the first
+track the author uploaded**, whatever its language — the settings' help says so too. A track that fails to download is replaced by the
 next candidate; a `429 Too Many Requests` ends the attempt, since YouTube then refuses this
 client rather than one track. YouTube's codes are matched by primary language (`en` takes
 `en`, then `en-GB`), its withdrawn `iw` counting as Hebrew.
@@ -337,12 +339,22 @@ client rather than one track. YouTube's codes are matched by primary language (`
 Kodi reads the language from the file name, so the track is labelled in the OSD. Nothing is
 searched for on disk: the file is attached to the playing item.
 
-YouTube's automatic captions are deliberately not used. They are machine output, and the
-machine-*translated* ones cannot be fetched at all: that endpoint requires browser TLS
-impersonation (`curl_cffi`), answering HTTP 429 to everything else — yt-dlp itself included.
-There is no Kodi module providing it, and it ships as per-architecture binaries, so no add-on
-can. Author-uploaded tracks have no such limit, and the one track is fetched alongside the
-manifest. Up to 2.3.0 every uploaded track was downloaded and Kodi chose: a talk with fifty
+Machine-*translated* captions are never used: YouTube refuses them (HTTP 429) to anything but
+a browser — yt-dlp marks every subtitle track for browser TLS impersonation (`curl_cffi`),
+which no Kodi add-on can ship. The author's tracks and the original automatic captions
+download like any file, and the one track is fetched alongside the manifest.
+
+**YouTube's own subtitle renditions are removed from the manifest.** Its HLS master lists two
+dozen of them (`hls_timedtext_playlist`); left in, Kodi offered them all next to the
+add-on's track, and the one picked was fetched by InputStream Adaptive, which answers a 429
+with a retry every second for the rest of the film. That traffic got the box's address
+blocked for every subtitle request — Google's *Sorry…* page, the add-on's own track included,
+while the browser, with its cookies and token, still shows subtitles. Since 2.5.0 the add-on's
+single request is all YouTube sees, and a 429 ends it — the renditions go even with
+*Rewrite the manifest* switched off, and without the service's server the plugin serves the
+manifest itself rather than hand InputStream Adaptive YouTube's. **After a 429 the add-on asks
+YouTube for no subtitles for 30 minutes**: every request during a block only feeds it, so the
+next videos play without subtitles and the log says until when. Up to 2.3.0 every uploaded track was downloaded and Kodi chose: a talk with fifty
 languages meant fifty requests on every playback, enough on their own to draw a 429.
 
 ### Playback
@@ -357,7 +369,8 @@ languages meant fifty requests on every playback, enough on their own to draw a 
 * **Local manifest server port** — `50153` by default (`plugin.video.youtube` uses 50152).
   The server listens on loopback only and serves nothing but `.m3u8` files from one
   directory; it restarts by itself when the port is changed. If the port cannot be bound, the
-  service logs why and playback continues with manifests as published.
+  service logs why, and each playback serves its own manifest from the plugin call instead, on
+  a port the system picks, until InputStream Adaptive has fetched it (30 s at most).
 
 ## Launching it from the Kodi UI
 
