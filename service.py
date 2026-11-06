@@ -62,6 +62,7 @@ class Service(xbmc.Monitor):
         super().__init__()
         started = time.monotonic()
         self.switches = kodilog.apply()
+        service_log.info("temporary files in %s", paths.use_own_tempdir())
         # Python 3.11 keeps the _strptime of whichever interpreter first calls
         # datetime.strptime; this one lives as long as Kodi (subinterp docstring).
         if subinterp.pin_strptime():
@@ -91,10 +92,11 @@ class Service(xbmc.Monitor):
         self._stopping = threading.Event()
         self.compile_ytdlp(cleanup=True)
         self.root = paths.manifest_directory()
-        # Rewritten manifests, kept originals and downloaded subtitles are
-        # per-playback scratch; anything left from a previous run is stale.
+        # Rewritten manifests, kept originals, downloaded subtitles and temporary
+        # files are per-playback scratch; anything left from a previous run is stale.
         removed = 0
-        for pattern in ("*.m3u8", "*.srt", "*.vtt", "*.original.txt", os.path.join("cache", "*.json")):
+        for pattern in ("*.m3u8", "*.srt", "*.vtt", "*.original.txt", os.path.join("cache", "*.json"),
+                        os.path.join("tmp", "*")):
             for stale in glob.glob(os.path.join(self.root, pattern)):
                 try:
                     os.remove(stale)

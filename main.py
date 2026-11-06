@@ -215,13 +215,18 @@ def show_settings():
 
 
 def pick_stream(info):
-    """(url, headers, kind): HLS, then DASH, then a single file (with both tracks, else audio)."""
+    """(url, headers, kind): HLS, then DASH, then the fragments of a live stream that
+    has just ended (no url: stream_prep builds it), then a single file (with both
+    tracks, else audio). kind None when there is nothing to play."""
     stream, headers = resolver.pick_hls(info)
     if stream:
         return stream, headers, "HLS"
     stream, headers = resolver.pick_dash(info)
     if stream:
         return stream, headers, "DASH"
+    fragments = resolver.post_live_video(info)
+    if fragments:
+        return None, resolver.headers_for(info, fragments[0]), stream_prep.POST_LIVE
     if not ADDON.getSettingBool("allow_progressive"):
         return None, None, None
     stream, headers = resolver.pick_progressive(info)
@@ -261,14 +266,16 @@ def resolve_item(params, switches):
             return fail(30011, resolver.short_error(error))
 
     stream, headers, kind = pick_stream(info)
-    if not stream:
+    if not kind:
         return fail(30012)
-    if kind in ("HLS", "DASH"):
+    if kind in ("HLS", "DASH", stream_prep.POST_LIVE):
         warn_if_isa_disabled()
     video = video_id or info.get("id")
     stream, served_locally, subtitle = stream_prep.prepare(ADDON, info, stream, headers, kind, video)
     resolved = False
     try:
+        if not stream:
+            return fail(30260)
         # A link with ?t=… starts there, unless the caller asked for a position.
         if not seek and info.get("start_time"):
             seek = as_seconds(info.get("start_time"))
@@ -313,12 +320,12 @@ def warn_if_isa_disabled():
 
 def _list_item(info, stream, headers, kind, served_locally, subtitle_file, seek):
     """What Kodi plays: the stream, what InputStream Adaptive needs for it, subtitles, title, start position."""
-    adaptive = kind in ("HLS", "DASH")
+    adaptive = kind in ("HLS", "DASH", stream_prep.POST_LIVE)
     item = xbmcgui.ListItem(path=stream if adaptive else resolver.kodi_url(stream, headers))
     item.setContentLookup(False)
 
     if adaptive:
-        item.setMimeType(resolver.HLS_MIME if kind == "HLS" else resolver.DASH_MIME)
+        item.setMimeType(resolver.DASH_MIME if kind == "DASH" else resolver.HLS_MIME)
         item.setProperty("inputstream", "inputstream.adaptive")
         encoded = resolver.encode_headers(headers)
         if encoded:
@@ -331,7 +338,7 @@ def _list_item(info, stream, headers, kind, served_locally, subtitle_file, seek)
         # property); ISA 20, Kodi 20 Nexus's, opens no manifest without it.
         reason = manifest_type_reason()
         if reason:
-            item.setProperty("inputstream.adaptive.manifest_type", "hls" if kind == "HLS" else "mpd")
+            item.setProperty("inputstream.adaptive.manifest_type", "mpd" if kind == "DASH" else "hls")
             resolve_log.info("manifest_type sent: %s", reason)
 
     if subtitle_file:
@@ -408,6 +415,7 @@ def play_url(params, switches):
 def main():
     global REQUEST
     switches = kodilog.apply(ADDON)
+    paths.use_own_tempdir()
     params = dict(urllib.parse.parse_qsl(sys.argv[2].lstrip("?")))
     resolve_log.info("called with %s", params)
     REQUEST = params.get("req")

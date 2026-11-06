@@ -27,6 +27,8 @@ PLAYLIST_LIMIT = 200
 
 # Cookie attributes in yt-dlp's per-format "cookies" string -- not cookies.
 _COOKIE_ATTRIBUTES = {"domain", "path", "expires", "max-age", "secure", "httponly", "samesite"}
+FRESH_SECONDS = 2 * 24 * 60 * 60
+_MEDIA_URL = re.compile(r"""(https?://)[^/\s"]+(/videoplayback[^\s"]*)""")
 
 
 def short_error(error):
@@ -80,6 +82,11 @@ def extract(url, logger=None, verbose=False, flat_playlists=False):
         "no_warnings": logger is None,
         "noplaylist": True,
         "skip_download": True,
+        # yt-dlp would test some formats of a fresh video with a trial download,
+        # for its own choice of format. InputStream Adaptive gets the whole manifest
+        # whatever the answer, and a finished live stream or a stalled server never
+        # reach that test; stream_prep checks what will actually play.
+        "check_formats": False,
     }
     if logger is not None:
         options["logger"] = logger
@@ -89,7 +96,51 @@ def extract(url, logger=None, verbose=False, flat_playlists=False):
         options["extract_flat"] = "in_playlist"
         options["playlistend"] = PLAYLIST_LIMIT
     with YoutubeDL(options) as ydl:
-        return ydl.sanitize_info(ydl.extract_info(url, download=False))
+        info = ydl.extract_info(url, download=False)
+        _drop_fragments(info)
+        return ydl.sanitize_info(info)
+
+
+def _drop_fragments(value):
+    """Remove every format's "fragments" before sanitize_info expands them.
+
+    A finished live stream has a lazy list of one URL per segment per format --
+    13650 for 81 minutes -- that nothing here reads, and that takes an ARM box
+    half a minute to expand.
+    """
+    if isinstance(value, dict):
+        value.pop("fragments", None)
+        for item in value.values():
+            _drop_fragments(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _drop_fragments(item)
+
+
+def is_fresh(info):
+    """True for a video uploaded in the last two days, the window yt-dlp itself
+    distrusts: its media may not have reached the server YouTube names yet."""
+    if info.get("live_status") in ("is_live", "is_upcoming", "post_live"):
+        return False
+    return (info.get("upload_date") or "") >= time.strftime("%Y%m%d", time.gmtime(time.time() - FRESH_SECONDS))
+
+
+def fallback_host(url):
+    """The next server YouTube names for a media URL, or None.
+
+    A googlevideo URL lists the servers that hold the video in "mn", nearest
+    first, and the number of its rr host in "mvi" -- as query parameters on a
+    file, as path segments on an HLS segment.
+    """
+    servers = re.search(r"[/?&]mn[=/]([^/&]+)", url)
+    number = re.search(r"[/?&]mvi[=/](\d+)", url)
+    names = urllib.parse.unquote(servers.group(1)).split(",") if servers else []
+    return "rr{}---{}.googlevideo.com".format(number.group(1), names[1]) if number and len(names) > 1 else None
+
+
+def through_host(text, host):
+    """text -- one media URL or a whole media playlist -- with its media URLs going to host."""
+    return _MEDIA_URL.sub(lambda match: match.group(1) + host + match.group(2), text)
 
 
 def pick_hls(info):
@@ -522,6 +573,34 @@ def strip_subtitle_renditions(text):
     return (_rebuild(entries, text), True) if changed else (text, False)
 
 
+def variant_uris(master):
+    """The URI of every variant of a master playlist, without repeats."""
+    return list(dict.fromkeys(entry["lines"][1] for entry in _parse(master) if entry["kind"] == "variant"))
+
+
+def lowest_variant_uri(master):
+    """The URI of the variant cheapest to fetch from, or None."""
+    variants = [entry for entry in _parse(master) if entry["kind"] == "variant"]
+    return min(variants, key=lambda entry: _bandwidth(entry["attrs"]))["lines"][1] if variants else None
+
+
+def repoint_variants(master, uris):
+    """master with every variant's URI replaced as uris ({old: new}) says; one not there is dropped."""
+    entries = []
+    for entry in _parse(master):
+        if entry["kind"] == "variant":
+            if entry["lines"][1] not in uris:
+                continue
+            entry = dict(entry, lines=[entry["lines"][0], uris[entry["lines"][1]]])
+        entries.append(entry)
+    return _rebuild(entries, master)
+
+
+def media_segments(playlist):
+    """The segment URIs of a media playlist, in order."""
+    return [line for line in playlist.splitlines() if line and not line.startswith("#")]
+
+
 def _rebuild(entries, original):
     rebuilt = "\n".join(line for entry in entries for line in entry["lines"])
     return rebuilt + "\n" if original.endswith("\n") else rebuilt
@@ -665,22 +744,80 @@ def build_fmp4_audio_playlist(audio_url, init_range, segments):
     absolute audio_url with its own BYTERANGE -- InputStream Adaptive issues
     range requests against it, with the stream headers the plugin sets.
     """
+    lines = []
+    for start, size, duration in segments:
+        lines.append("#EXTINF:{:.3f},".format(duration))
+        lines.append("#EXT-X-BYTERANGE:{}@{}".format(size, start))
+        lines.append(audio_url)
     target = max((int(duration) + 1 for _, _, duration in segments), default=10)
+    return _fmp4_playlist(audio_url, init_range, target, lines)
+
+
+def _fmp4_playlist(map_url, init_range, target, lines):
     init_length = init_range[1] - init_range[0]
-    lines = [
+    return "\n".join([
         "#EXTM3U",
         "#EXT-X-VERSION:7",
         "#EXT-X-PLAYLIST-TYPE:VOD",
         "#EXT-X-TARGETDURATION:{}".format(target),
         "#EXT-X-MEDIA-SEQUENCE:0",
-        '#EXT-X-MAP:URI="{}",BYTERANGE="{}@{}"'.format(audio_url, init_length, init_range[0]),
-    ]
-    for start, size, duration in segments:
-        lines.append("#EXTINF:{:.3f},".format(duration))
-        lines.append("#EXT-X-BYTERANGE:{}@{}".format(size, start))
-        lines.append(audio_url)
-    lines.append("#EXT-X-ENDLIST")
-    return "\n".join(lines) + "\n"
+        '#EXT-X-MAP:URI="{}",BYTERANGE="{}@{}"'.format(map_url, init_length, init_range[0]),
+        *lines,
+        "#EXT-X-ENDLIST",
+    ]) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# A live stream that has just ended
+#
+# Until YouTube has processed it -- half an hour after an 81-minute stream --
+# yt-dlp offers neither a manifest nor a file for it, only numbered fragments:
+# url&sq=0, url&sq=1... each a complete fMP4 of target_duration seconds with its
+# own ftyp and moov, the whole stream from the start. (The HLS manifest yt-dlp
+# hides unless asked covers the last four hours only.) So the playlists are
+# written here: H.264 for the video, WebM fragments being no use in HLS.
+# ---------------------------------------------------------------------------
+
+def post_live_video(info):
+    """The fragmented H.264 formats of a live stream that has just ended; [] for anything else."""
+    if info.get("live_status") != "post_live" or not info.get("duration"):
+        return []
+    return [fmt for fmt in info.get("formats") or ()
+            if fmt.get("protocol") == "http_dash_segments" and fmt.get("url") and fmt.get("target_duration")
+            and (fmt.get("vcodec") or "").startswith("avc1") and fmt.get("acodec") in (None, "none")]
+
+
+def fragment_url(url, number):
+    return "{}&sq={}".format(url, number)
+
+
+def build_fragment_playlist(url, init_range, duration, target, first=0):
+    """A media playlist over a format's numbered fragments from first on, as many as duration holds whole.
+
+    The init map is the first fragment's ftyp and moov; each fragment repeats
+    them, and the fragmented reader skips what is not a moof. A last partial
+    fragment may not exist: asked for one past the end, the server holds the
+    request for eight seconds and answers 204. At most the last seconds go.
+    """
+    lines = []
+    for number in range(first, max(first + 1, int(duration // target))):
+        lines.append("#EXTINF:{:.3f},".format(target))
+        lines.append(fragment_url(url, number))
+    return _fmp4_playlist(fragment_url(url, first), init_range, target, lines)
+
+
+def build_fragment_master(variants, audio_uri, language):
+    """A master playlist from [(format, media playlist URI)] and the fMP4 audio playlist."""
+    lines = ["#EXTM3U", "#EXT-X-INDEPENDENT-SEGMENTS"]
+    for fmt, uri in variants:
+        attributes = ["BANDWIDTH={}".format(int((fmt.get("tbr") or 1) * 1000))]
+        if fmt.get("width") and fmt.get("height"):
+            attributes.append("RESOLUTION={}x{}".format(fmt["width"], fmt["height"]))
+        attributes.append('CODECS="{},mp4a.40.2"'.format(fmt["vcodec"]))
+        attributes.append('AUDIO="{}"'.format(AUDIO_GROUP_ID))
+        lines.append("#EXT-X-STREAM-INF:" + ",".join(attributes))
+        lines.append(uri)
+    return swap_audio_to_fmp4("\n".join(lines) + "\n", audio_uri, language)
 
 
 AUDIO_GROUP_ID = "ytdlpcast-audio"

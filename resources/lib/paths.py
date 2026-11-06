@@ -6,6 +6,7 @@ path.
 """
 
 import os
+import tempfile
 
 import xbmcaddon
 import xbmcvfs
@@ -17,6 +18,28 @@ def manifest_directory():
     path = os.path.join(xbmcvfs.translatePath("special://temp/"), addon_id)
     xbmcvfs.mkdirs(path)
     return path
+
+
+def temp_directory():
+    """Where Python's tempfile writes for this add-on. The service empties it at start."""
+    path = os.path.join(manifest_directory(), "tmp")
+    xbmcvfs.mkdirs(path)
+    return path
+
+
+def use_own_tempdir():
+    """Send Python's tempfile to the add-on's own directory; return that directory.
+
+    Left alone, tempfile looks for a writable /tmp, /var/tmp, /usr/tmp or working
+    directory. Android gives Kodi none of them ("No usable temporary directory
+    found"), and yt-dlp updates itself, so what asks for a temporary file can
+    change at any time. Set on every platform: Python then tries none of those
+    places, and a box with a /tmp runs the same code as one without. tempfile is
+    a Python module, one per interpreter, so the service and every plugin call
+    each have to set it.
+    """
+    tempfile.tempdir = temp_directory()
+    return tempfile.tempdir
 
 
 def ytdlp_directory():

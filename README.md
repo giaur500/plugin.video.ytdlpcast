@@ -129,6 +129,29 @@ This matters more than it sounds: modern YouTube videos usually offer **no muxed
 all** (`yt-dlp -f b` fails outright on many of them), so the naive "resolve to one URL and
 play it" approach does not work. The HLS manifest is what makes a single-URL handoff possible.
 
+## Fresh videos
+
+YouTube serves a video before everything around it is ready, in three ways the add-on has to
+live with:
+
+* **A live stream that has just ended.** Until YouTube has processed it (half an hour after an
+  81-minute stream) yt-dlp offers no manifest and no file, only numbered fragments: `url&sq=0`,
+  `url&sq=1`… each a complete fMP4 of five seconds. The add-on writes the playlists itself: the
+  H.264 formats the *Picture & sound* settings keep, and the fMP4 audio. Minutes after the end
+  single fragments may not answer yet; when the very first ones do not, the stream starts a few
+  seconds in. YouTube's own HLS manifest for such a stream, which yt-dlp hides unless asked, covers
+  only the last four hours.
+* **A nearby server without the video.** Minutes after an upload the server YouTube names may
+  hold every request for half a minute and then answer 503, while InputStream Adaptive waits
+  without a word. For a video under two days old the add-on therefore tries the first and a
+  middle segment of one variant, four seconds each. If they do not arrive it tries them through
+  the next server in the same URL (`mn`), and if that one delivers, the video and the fMP4 audio
+  come through it. If no server delivers, the screen says YouTube is still preparing the video
+  and playback goes ahead anyway. With *Rewrite the manifest* off there is no such check.
+* **yt-dlp's own format test is switched off** (`check_formats`). It tries one format of a fresh
+  video, in a temporary file, for yt-dlp's own choice; InputStream Adaptive gets the whole
+  manifest whatever the answer, and neither case above ever reaches it.
+
 ## Requirements
 
 Kodi 21 Omega or Kodi 20 Nexus: CoreELEC, LibreELEC, Android. Not Windows: Kodi ships Python
@@ -198,6 +221,10 @@ downloads that file, checks it, and puts it on `sys.path`.
   interpreter that lives as long as Kodi; should another add-on have got there first, the
   plugin gives its own interpreter a `datetime` whose `strptime` uses its own `_strptime`.
   Some boxes never showed this: a long-lived service of theirs happened to call it first.
+* **Temporary files**: Python's `tempfile` is pointed at `<Kodi temp>/plugin.video.ytdlpcast/tmp`
+  on every platform. Left alone it looks for `/tmp`, `/var/tmp`, `/usr/tmp` and the working
+  directory, none of which Android lets Kodi write to, and whatever in yt-dlp asks for a temporary
+  file then fails with `No usable temporary directory found`.
 * **Storage**: `addon_data/plugin.video.ytdlpcast/ytdlp/`, one archive per version, never
   overwritten in place (zipimport caches a ZIP's directory per path), current and previous
   kept, plus the compiled directories of the copy in use and of the bundled one. The copy

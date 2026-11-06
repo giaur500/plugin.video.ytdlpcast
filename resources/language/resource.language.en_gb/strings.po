@@ -719,3 +719,7 @@ msgstr ""
 msgctxt "#30259"
 msgid "YouTube's automatic captions in the video's own language, the ones its page shows as auto-generated. Their machine translations are never used: YouTube refuses them to anything but a web browser."
 msgstr ""
+
+msgctxt "#30260"
+msgid "YouTube is still preparing this video: playback may not start. Try again in a while."
+msgstr ""
