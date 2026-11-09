@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="plugin.video.ytdlpcast"
        name="yt-dlp Cast"
-       version="2.6.0"
+       version="2.6.2"
        provider-name="michal">
 
     <requires>
@@ -20,7 +20,9 @@
         <summary lang="pl_PL">Przesyłaj YouTube z telefonu do Kodi, odtwarzane przez yt-dlp</summary>
         <description lang="en_GB">Kodi shows up as a TV in the YouTube app: pick it from the cast menu, or link it once with a TV code. Every video is resolved by yt-dlp, which the add-on keeps current by itself, and played by InputStream Adaptive from YouTube's HLS manifest -- streamed, with seeking and quality switching, nothing downloaded first. No other add-on is needed for casting. An optional web interface plays any link yt-dlp supports -- YouTube, Dailymotion, Facebook, archive.org and many more, whole playlists as a queue -- shows what is playing with a seek bar, and the add-on's log.</description>
         <description lang="pl_PL">Kodi pojawia się jako telewizor w aplikacji YouTube: wybierz go w menu przesyłania albo połącz raz kodem TV. Każdy film rozwiązuje yt-dlp, który dodatek sam aktualizuje, a odtwarza InputStream Adaptive z manifestu HLS YouTube -- strumieniowo, z przewijaniem i zmianą jakości, bez wcześniejszego pobierania. Do przesyłania nie jest potrzebny żaden inny dodatek. Opcjonalny interfejs WWW odtwarza dowolny link obsługiwany przez yt-dlp -- YouTube, Dailymotion, Facebook, archive.org i wiele innych, całe playlisty jako kolejkę -- pokazuje, co gra, z suwakiem przewijania, oraz log wtyczki.</description>
-        <news>v2.6.0
+        <news>v2.6.2
+- Cast: the phone no longer leaves about ten seconds after sending a video: just after the phone picked Kodi, the YouTube app could still be reported as stopped, which the phone takes for a closed app; it also hears at once which video is loading
+v2.6.0
 - A live stream that has just ended plays, from its start: until YouTube has processed it there is no manifest, so one is built from its fragments, with fMP4 audio ("No playable stream found" before)
 - A video uploaded minutes ago no longer hangs without a word when the nearby YouTube server does not have it yet: the media comes through the next server, or the screen says YouTube is still preparing it
 - Android: no more "No usable temporary directory found" on fresh videos; the add-on keeps temporary files in its own directory on every platform, and yt-dlp's trial download of fresh videos is switched off

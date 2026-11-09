@@ -198,6 +198,12 @@ class _DialHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
+        if path == APP_PATH:
+            # Logged: told "stopped" just after its launch, a phone leaves the session ten seconds later.
+            running = self.server.app.is_running()
+            dial_log.info("%s GET %s: %s", self.client_address[0], path, "running" if running else "stopped")
+            self._detail()
+            return self._respond(200, APP_RUNNING if running else APP_STOPPED)
         dial_log.info("%s GET %s", self.client_address[0], path)
         self._detail()
         if path == DESCRIPTION_PATH:
@@ -205,8 +211,6 @@ class _DialHandler(BaseHTTPRequestHandler):
             body = DEVICE_DESCRIPTION.format(base=escape("http://" + host), name=escape(self.server.app.name),
                                              uuid=self.server.app.uuid)
             return self._respond(200, body, {"Application-URL": "http://{}/apps".format(host)})
-        if path == APP_PATH:
-            return self._respond(200, APP_RUNNING if self.server.app.is_running() else APP_STOPPED)
         self._respond(404, "not found", content_type="text/plain")
 
     def do_POST(self):

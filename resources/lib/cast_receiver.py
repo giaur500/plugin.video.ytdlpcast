@@ -5,7 +5,8 @@ Ported from TubeCast's YoutubeCastV1 by enen92 (MIT, see LICENSE.txt), with the
 player behind a small interface so the same logic runs in Kodi (cast_kodi) and
 on a desktop (scripts/cast-harness.py). Every method is called from one thread
 -- the cast controller's -- so nothing here needs a lock; the exceptions are
-is_running() and launch(), which the DIAL server calls and which only read.
+is_running() and launch(), which the DIAL server calls: the one reads, the
+other only notes when the phone launched.
 
 player must provide play(video_id, seconds), pause(), resume(), stop(),
 seek(seconds), status() -> (state, position, duration), volume() ->
@@ -33,14 +34,17 @@ IGNORED_COMMANDS = ("noop", "getDiscoveryDeviceId", "onUserActivity", "getSubtit
 class CastReceiver:
     REPORT_EVERY = 5  # seconds between position reports while playing
     RESOLVE_TIMEOUT = 90  # yt-dlp on a slow box takes 10-20 s; this means it is not coming
+    LAUNCH_WAIT = 60  # seconds a DIAL launch counts as the app running, until its phone joins
 
     def __init__(self, session, player):
         self.session = session
         self.player = player
         self.state = cast_protocol.CastState()
         self.remotes = {}
+        self.launched_until = 0  # a DIAL launch whose phone has not joined yet
         self.pending = None   # video asked for, not started yet
         self.pending_since = 0
+        self.pending_position = 0  # where the phone asked it to start
         self.active = None    # video playing because the phone asked for it
         self.cpn = None
         self.last_report = 0
@@ -57,8 +61,12 @@ class CastReceiver:
     def uuid(self):
         return self.session.identity.device_id
 
-    def is_running(self):
-        return bool(self.remotes)
+    def is_running(self, now=None):
+        # From the launch on, not only once the phone's arrival has been taken
+        # off the queue: the phone asks right after its setPlaylist, and on
+        # hearing "stopped" it leaves the session ten seconds later.
+        now = now if now is not None else time.monotonic()
+        return bool(self.remotes) or now < self.launched_until
 
     def launch(self, form):
         code = form.get("pairingCode")
@@ -73,6 +81,7 @@ class CastReceiver:
         except Exception:  # noqa: BLE001 - answered with 503, the phone retries
             log.exception("registering the pairing code failed")
             return False
+        self.launched_until = time.monotonic() + self.LAUNCH_WAIT
         return True
 
     def stop(self):
@@ -105,6 +114,7 @@ class CastReceiver:
     def _on_remoteConnected(self, data):
         remote_id, name = data.get("id"), data.get("name") or "?"
         self.remotes[remote_id] = name
+        self.launched_until = 0  # joined: from here on the lounge says who is there
         log.log(diag.NOTICE, "phone connected: %s", name)
         self.player.notify(name, "connected")
         # Kodi plays the phone's queue; YouTube's own autoplay would fight it.
@@ -191,8 +201,12 @@ class CastReceiver:
         log.info("playing %s from %ss", video_id, int(seconds))
         self.pending, self.active = video_id, None
         self.pending_since = time.monotonic()
+        self.pending_position = seconds
         self.cpn = "".join(random.choice(string.ascii_letters + string.digits) for _ in range(16))
+        # Which video is loading, said at once, as yt-cast-receiver does:
+        # resolving a fresh one can take ten seconds and more.
         self.report_state(STATUS_LOADING, seconds, 0)
+        self.report_now_playing()
         self.player.play(video_id, seconds)
 
     def on_started(self, ours):
@@ -276,11 +290,11 @@ class CastReceiver:
 
     def report_now_playing(self):
         data = self.state.now_playing()
-        if data and (self.active or self.pending):
-            state, position, duration = self.player.status()
-            if self.pending:
-                state = STATUS_LOADING
-            data.update(_timing(state, position, duration, self.cpn))
+        if data and self.pending:
+            # Whatever Kodi plays meanwhile is the previous video: its position means nothing here.
+            data.update(_timing(STATUS_LOADING, self.pending_position, 0, self.cpn))
+        elif data and self.active:
+            data.update(_timing(*self.player.status(), self.cpn))
         self._send("nowPlaying", data)
 
     def report_volume(self, level, muted):

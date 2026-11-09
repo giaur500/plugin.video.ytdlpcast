@@ -24,14 +24,17 @@ Kodi becomes a "Watch on TV" device, the same way smart TVs without Chromecast b
 
 1. **Finding Kodi.** The YouTube app searches the local network (SSDP), Kodi answers with a
    DIAL description, and the app lists it in its cast menu. Picking it hands Kodi a one-time
-   pairing code, which Kodi registers with YouTube.
+   pairing code, which Kodi registers with YouTube. From then on Kodi reports the YouTube app
+   as running: the phone asks again right after it sends the first video, and on hearing
+   *stopped* it leaves the session about ten seconds later.
 2. **Or a TV code.** *Settings → Cast → Link with a TV code* shows a code to type into the app
    (*Settings → Watch on TV → Enter TV code*). This works when the phone is on another network
    or the local search does not reach Kodi — some Android TV boxes and mesh/guest Wi-Fi
    networks drop multicast.
 3. **The session runs through YouTube** (the Lounge API): the phone sends commands — play this
    queue, pause, seek, volume, next — and Kodi reports back what it is doing, so the phone's
-   progress bar and controls stay in step.
+   progress bar and controls stay in step. The phone hears at once which video is loading
+   (`nowPlaying`), not only once it plays: resolving a fresh video can take ten seconds and more.
 
 Kodi keeps the same screen identity across restarts, so a phone linked once stays linked.
 While casting is on, Kodi therefore holds one long-lived HTTPS connection to youtube.com.
