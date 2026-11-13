@@ -255,7 +255,7 @@ which Kodi 20 and 21 log without their own debug mode — under its own prefix,
 | yt-dlp verbose mode | `ytdlp:` | yt-dlp's own verbose output: versions, Python, OpenSSL, certifi, JavaScript runtimes, YouTube clients |
 | Manifest rewriting | `manifest:` | variants and audio groups before and after each filter, the fMP4 audio swap, the served URL; keeps the original manifest as `<id>.original.txt` next to the rewritten one |
 | Manifest server requests | `manifest/server:` | every request InputStream Adaptive makes to the loopback server |
-| Subtitle downloads | `subtitles:` | uploaded and automatic tracks, what is downloaded, sizes and times |
+| Subtitle downloads | `subtitles:` | uploaded and automatic tracks, what is downloaded, sizes and times, how long drawing the automatic captions took |
 | Kodi player | `player:` | decoder and whether it runs in hardware, pixel format, resolution, audio decoder; quality changes; every stall to buffer with its length (told apart from buffering after a seek); a summary at the end |
 | HTTP requests of the add-on | `http:` | every request the add-on itself makes, with status, size and time, and once the CA bundle in use. Query strings and googlevideo signature segments are left out |
 | yt-dlp updater | `updates:` | which file is used, and each step of a check: checksum, download, validation, clean-up |
@@ -352,11 +352,12 @@ failed, nothing changed — the add-on hands over YouTube's original URL, exactl
 ### Subtitles
 
 * **Download subtitles** — on by default. Downloads **one** subtitle track, as
-  `<video id>.<lang>.srt` (or `.vtt`) in Kodi's temp directory, handed to the player with
-  `setSubtitles()`.
+  `<video id>.<lang>.srt` (or `.vtt`, or `.ass` for automatic captions) in Kodi's temp
+  directory, handed to the player with `setSubtitles()`.
 * **Subtitle language** — *Kodi's interface language* (default) or one of 38 languages.
 * **Fallback language** — *English* (default), another language, or *None*.
 * **Automatic captions when the author added none** — on by default.
+* **Automatic captions look** — *As on YouTube* (default) or *Plain lines*; see below.
 
 The track is the author's in the subtitle language; when the video has none, the author's in
 the fallback language; then YouTube's **automatic captions in the video's own language** —
@@ -368,6 +369,34 @@ client rather than one track. YouTube's codes are matched by primary language (`
 
 Kodi reads the language from the file name, so the track is labelled in the OSD. Nothing is
 searched for on disk: the file is attached to the playing item.
+
+**Automatic captions are drawn as YouTube draws them.** YouTube writes them for a window of
+two rows that rolls up: each line lasts until the line after next begins, every word has its
+own time, and a newline appended to the window pushes the older line up. Its SRT turns that
+into cues overlapping the next by about two seconds; Kodi hands each to libass as an event of
+its own, and libass stacks overlapping events by collision — the newer line above the older,
+after a seek in no particular order (Kodi's `DVDSubtitlesLibass.cpp` says so). Its WebVTT has
+the word times as `<00:00:02.600><c> to</c>`, which Kodi's WebVTT reader ignores. So the
+add-on fetches them as **json3**, the format YouTube's own player reads (srv3 by another
+name; YTSubConverter documents its attributes), and draws them itself (`youtube_captions`):
+
+* The window is followed through time. Whenever a word appears or a line comes or goes, what
+  the window shows until the next change becomes one ASS event: the words appear as they are
+  spoken, the older line stays above the newer, and no two events of a window overlap —
+  nothing is left for libass to stack. No karaoke tags, so Kodi's *Override ASS styles* still
+  works.
+* YouTube's placement: the window's anchor point at its position, mapped as the player maps it
+  (`0.96 × value + 2` %); a window too wide for a large font moves in, once, so it never jumps.
+  Pens become ASS tags: bold, italic, underline, colours and opacity, background, edge types
+  when the background is off, size, font family.
+* White text on a 75 % black box, as on YouTube, at **Kodi's own subtitle font size**
+  (`subtitles.fontsize` on Kodi's 1080-line canvas, as Kodi draws its text subtitles).
+* *Plain lines* draws the same windows as SRT instead: whole lines, two at a time, the older
+  above the newer, never two cues at once — in Kodi's own subtitle style and position. It is
+  also what comes out if drawing the window ever fails; the track is never fetched twice.
+
+The author's own tracks keep YouTube's SRT exactly as before: they show well as they are, and
+drawing them would take Kodi's subtitle style and position away from them.
 
 Machine-*translated* captions are never used: YouTube refuses them (HTTP 429) to anything but
 a browser — yt-dlp marks every subtitle track for browser TLS impersonation (`curl_cffi`),

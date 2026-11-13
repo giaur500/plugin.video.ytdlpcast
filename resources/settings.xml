@@ -321,6 +321,27 @@
                     </dependencies>
                     <control type="toggle"/>
                 </setting>
+                <setting id="subtitles_automatic_look" type="integer" label="30338" help="30339">
+                    <level>0</level>
+                    <default>0</default>
+                    <dependencies>
+                        <dependency type="enable">
+                            <and>
+                                <condition setting="subtitles_enabled">true</condition>
+                                <condition setting="subtitles_automatic">true</condition>
+                            </and>
+                        </dependency>
+                    </dependencies>
+                    <constraints>
+                        <options>
+                            <option label="30340">0</option>
+                            <option label="30341">1</option>
+                        </options>
+                    </constraints>
+                    <control type="list" format="integer">
+                        <heading>30338</heading>
+                    </control>
+                </setting>
             </group>
         </category>
         <category id="ytdlp" label="30160">

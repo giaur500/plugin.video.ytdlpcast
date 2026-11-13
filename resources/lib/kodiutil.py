@@ -30,6 +30,14 @@ def json_rpc(method, params=None):
     return reply.get("result")
 
 
+def subtitle_font_size(default=42):
+    """Kodi's subtitle font size setting (pixels of a 720-line picture), or Kodi's default."""
+    try:
+        return int(json_rpc("Settings.GetSettingValue", {"setting": "subtitles.fontsize"})["value"])
+    except Exception:  # noqa: BLE001 - an older Kodi or a stub: the default size will do
+        return default
+
+
 def network_address():
     """The box's address on the network, or "" while it has none (booting, cable out)."""
     ip = xbmc.getIPAddress()

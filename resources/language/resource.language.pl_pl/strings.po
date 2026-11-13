@@ -715,6 +715,22 @@ msgctxt "#30259"
 msgid "YouTube's automatic captions in the video's own language, the ones its page shows as auto-generated. Their machine translations are never used: YouTube refuses them to anything but a web browser."
 msgstr "Napisy automatyczne YouTube w języku filmu, te, które strona pokazuje jako wygenerowane automatycznie. Tłumaczeń maszynowych wtyczka nie używa: YouTube wydaje je tylko przeglądarce."
 
+msgctxt "#30338"
+msgid "Automatic captions look"
+msgstr "Wygląd napisów automatycznych"
+
+msgctxt "#30339"
+msgid "As on YouTube: the words appear as they are spoken, in two rows that roll up, with YouTube's position and background. Plain lines: whole lines, two at a time, in Kodi's own subtitle style and position."
+msgstr "Jak w YouTube: słowa pojawiają się w chwili, gdy padają, w dwóch wierszach przewijanych w górę, z pozycją i tłem jak w YouTube. Zwykłe wiersze: całe wiersze, po dwa naraz, w stylu i miejscu napisów Kodi."
+
+msgctxt "#30340"
+msgid "As on YouTube"
+msgstr "Jak w YouTube"
+
+msgctxt "#30341"
+msgid "Plain lines"
+msgstr "Zwykłe wiersze"
+
 msgctxt "#30260"
 msgid "YouTube is still preparing this video: playback may not start. Try again in a while."
 msgstr "YouTube wciąż przygotowuje ten film: odtwarzanie może się nie rozpocząć. Spróbuj za chwilę."

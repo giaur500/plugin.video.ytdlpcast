@@ -8,7 +8,9 @@ A fresh video is checked first: when the server YouTube names is not delivering
 yet, the media comes through the next one. A live stream that has just ended
 has no manifest at all, so one is built from its fragments.
 For every site: one of the uploader's subtitle tracks -- in the language the
-settings ask for -- as a local file Kodi labels by name.
+settings ask for -- as a local file Kodi labels by name. YouTube's automatic
+captions come as json3 and are drawn as YouTube's player draws them
+(youtube_captions), or as plain lines if the settings say so.
 
 Whatever cannot be done -- server down, a fetch failing, nothing to change --
 falls back to what the site published; nothing here may stop playback.
@@ -26,7 +28,7 @@ import xbmc
 import xbmcgui
 import xbmcvfs
 
-from . import diag, manifest_server, mp4index, paths, resolver
+from . import diag, kodiutil, manifest_server, mp4index, paths, resolver, youtube_captions
 from .kodilog import log
 from .kodiutil import ADDON_ID, HOME
 
@@ -35,6 +37,8 @@ subtitles_log = diag.logger("subtitles")
 
 # Values of the audio_mode setting.
 AUDIO_MODE_FMP4, AUDIO_MODE_AS_PUBLISHED = 0, 1
+# Values of the subtitles_automatic_look setting.
+LOOK_YOUTUBE, LOOK_PLAIN = 0, 1
 
 # The manifest, the head of the fMP4 audio file, the subtitles; then a fresh
 # video's checks or copies of its playlists, a finished stream's fragments.
@@ -501,7 +505,10 @@ def _start_subtitles(addon, pool, info):
                        "the original if the author added none" if automatic else "switched off",
                        ", ".join(languages) or "-",
                        ", ".join(_label(language, machine) for language, _, _, machine in candidates) or "nothing")
-    return (pool.submit(_fetch_first, candidates), candidates) if candidates else None
+    look = None
+    if any(ext == "json3" for _, _, ext, _ in candidates):
+        look = (addon.getSettingInt("subtitles_automatic_look"), kodiutil.subtitle_font_size())
+    return (pool.submit(_fetch_first, candidates, look), candidates) if candidates else None
 
 
 def refused_at():
@@ -524,24 +531,58 @@ def _label(language, automatic):
     return language + (" (auto)" if automatic else "")
 
 
-def _fetch_first(candidates):
+def _fetch_first(candidates, look=None):
     """(track, problems): track is (language, ext, automatic, bytes, seconds) of
     the first candidate that downloads, or None; problems are (label, error) of
     the ones that did not.
 
     A 429 ends the attempt: it is YouTube refusing this client, not one track,
-    and every other request would get it too.
+    and every other request would get it too. json3 is drawn here, in this
+    worker, while the manifest is still being prepared; look is
+    (subtitles_automatic_look, Kodi's font size) for it.
     """
     problems = []
     for language, url, ext, automatic in candidates:
         started = time.monotonic()
         try:
-            return (language, ext, automatic, resolver.fetch(url), time.monotonic() - started), problems
+            data = resolver.fetch(url)
         except Exception as error:  # noqa: BLE001 - the next candidate may still work
             problems.append((_label(language, automatic), error))
             if isinstance(error, urllib.error.HTTPError) and error.code == 429:
                 break
+            continue
+        took = time.monotonic() - started
+        if ext == "json3":
+            try:
+                data, ext = _draw_captions(data, look or (LOOK_YOUTUBE, youtube_captions.KODI_FONT_SIZE))
+            except Exception as error:  # noqa: BLE001 - the next candidate may still work
+                problems.append((_label(language, automatic), error))
+                continue
+        return (language, ext, automatic, data, took), problems
     return None, problems
+
+
+def _draw_captions(data, look):
+    """(bytes, ext) for Kodi from YouTube's json3 captions, in the look the settings ask for.
+
+    As YouTube's player draws them, in ASS; as plain SRT lines when asked, or
+    when the drawing fails -- from the same data, so the track is never asked
+    for twice (429).
+    """
+    mode, font_size = look
+    started = time.monotonic()
+    if mode == LOOK_YOUTUBE:
+        try:
+            text, ext = youtube_captions.to_ass(data, font_size), "ass"
+        except Exception as error:  # noqa: BLE001 - the plain lines may still come out of it
+            log("subtitles: YouTube's captions could not be drawn ({}: {}), plain lines instead".format(
+                type(error).__name__, error), xbmc.LOGWARNING)
+            text, ext = youtube_captions.to_srt(data), "srt"
+    else:
+        text, ext = youtube_captions.to_srt(data), "srt"
+    subtitles_log.info("json3 of %d bytes drawn %s in %.0f ms", len(data),
+                       "as on YouTube" if ext == "ass" else "as plain lines", (time.monotonic() - started) * 1000)
+    return text.encode("utf-8"), ext
 
 
 def _finish_subtitles(job, name, youtube):
@@ -550,7 +591,7 @@ def _finish_subtitles(job, name, youtube):
     Kodi reads the language from the file name: CUtil::GetExternalStreamDetailsFromFilename
     strips the video's base name, splits the rest on " .-" and walks the tokens
     backwards until one converts to an ISO code, so "<video id>.<lang>.srt"
-    labels the track.
+    labels the track -- and "<video id>.<lang>.ass" alike.
     """
     if job is None:
         return None

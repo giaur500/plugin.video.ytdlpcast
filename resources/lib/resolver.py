@@ -612,6 +612,11 @@ def _rebuild(entries, original):
 
 # Kodi reads both; srt without any surprises.
 _SUBTITLE_EXTENSIONS = ("srt", "vtt")
+# YouTube's automatic captions are a window of two rows with every word timed;
+# its SRT turns that into cues overlapping by seconds, which Kodi stacks in the
+# wrong order. json3 keeps the window, and youtube_captions draws it. The
+# uploader's tracks keep their SRT: they already show well.
+_AUTOMATIC_EXTENSIONS = ("json3",) + _SUBTITLE_EXTENSIONS
 # YouTube still uses a few withdrawn ISO 639 codes; Kodi and the settings use the current ones.
 _LANGUAGE_ALIASES = {"iw": "he", "in": "id", "ji": "yi", "jw": "jv"}
 
@@ -627,9 +632,9 @@ def _primary_language(code):
     return _LANGUAGE_ALIASES.get(primary, primary)
 
 
-def _subtitle_file(tracks):
-    """(url, ext) of the first format Kodi reads well, or None."""
-    for extension in _SUBTITLE_EXTENSIONS:
+def _subtitle_file(tracks, extensions=_SUBTITLE_EXTENSIONS):
+    """(url, ext) of the first of extensions the track comes in, or None."""
+    for extension in extensions:
         track = next((t for t in tracks if t.get("ext") == extension and t.get("url")), None)
         if track:
             return track["url"], extension
@@ -654,7 +659,7 @@ def _automatic_original(info, languages):
     """
     originals = {}  # language -> (code, language, url, ext), "-orig" preferred
     for code, tracks in (info.get("automatic_captions") or {}).items():
-        found = _subtitle_file(tracks or ())
+        found = _subtitle_file(tracks or (), _AUTOMATIC_EXTENSIONS)
         if not found or _translated(found[0]):
             continue
         language = _primary_language(code[:-len("-orig")] if code.endswith("-orig") else code)

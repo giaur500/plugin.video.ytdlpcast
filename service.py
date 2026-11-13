@@ -95,7 +95,7 @@ class Service(xbmc.Monitor):
         # Rewritten manifests, kept originals, downloaded subtitles and temporary
         # files are per-playback scratch; anything left from a previous run is stale.
         removed = 0
-        for pattern in ("*.m3u8", "*.srt", "*.vtt", "*.original.txt", os.path.join("cache", "*.json"),
+        for pattern in ("*.m3u8", "*.srt", "*.vtt", "*.ass", "*.original.txt", os.path.join("cache", "*.json"),
                         os.path.join("tmp", "*")):
             for stale in glob.glob(os.path.join(self.root, pattern)):
                 try:
