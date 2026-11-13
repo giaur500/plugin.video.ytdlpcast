@@ -173,8 +173,17 @@ manifest itself, in the lowest quality; the add-on says so on screen and in the 
 
 ## Installation
 
-Install from zip. Kodi fetches `script.module.certifi` from its official repository by itself;
+Download `plugin.video.ytdlpcast-<version>.zip` from the
+[latest release](https://github.com/giaur500/plugin.video.ytdlpcast/releases/latest) and install
+it from zip. Kodi fetches `script.module.certifi` from its official repository by itself;
 on a box without access to it, install that module's zip first.
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`) when a tag `vX.Y.Z`
+matching `addon.xml`'s version is pushed. It is the same build as on a desktop
+(`.github/build.sh`: XML, compilation, a Python 3.11 grammar check), with the current yt-dlp
+stable bundled and a `.sha256` file next to the zip; the release notes are the version's
+`<news>`. *Actions → Release → Run workflow* builds a test zip instead, kept with the run for
+30 days.
 
 ## Keeping yt-dlp current
 
